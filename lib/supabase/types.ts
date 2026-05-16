@@ -39,8 +39,55 @@ export interface Database {
           created_at: string;
           deleted_at: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['users']['Row'], 'created_at'>;
-        Update: Partial<Database['public']['Tables']['users']['Insert']>;
+        Insert: {
+          id: string;
+          email: string;
+          display_name?: string | null;
+          unit_system?: UnitSystem;
+          unit_preference?: 'lbs' | 'kg';
+          gender?: Gender | null;
+          date_of_birth?: string | null;
+          height_cm?: number | null;
+          weight_kg?: number | null;
+          experience_level?: ExperienceLevel | null;
+          primary_goal?: PrimaryGoal | null;
+          training_days_per_week?: number | null;
+          equipment_access?: string[] | null;
+          goal_weight_kg?: number | null;
+          goal_date?: string | null;
+          weight_change_rate_kg_per_week?: number | null;
+          calorie_target_kcal?: number | null;
+          protein_target_g?: number | null;
+          carbs_target_g?: number | null;
+          fat_target_g?: number | null;
+          nutrition_tracking_enabled?: boolean;
+          onboarding_completed_at?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          email?: string;
+          display_name?: string | null;
+          unit_system?: UnitSystem;
+          unit_preference?: 'lbs' | 'kg';
+          gender?: Gender | null;
+          date_of_birth?: string | null;
+          height_cm?: number | null;
+          weight_kg?: number | null;
+          experience_level?: ExperienceLevel | null;
+          primary_goal?: PrimaryGoal | null;
+          training_days_per_week?: number | null;
+          equipment_access?: string[] | null;
+          goal_weight_kg?: number | null;
+          goal_date?: string | null;
+          weight_change_rate_kg_per_week?: number | null;
+          calorie_target_kcal?: number | null;
+          protein_target_g?: number | null;
+          carbs_target_g?: number | null;
+          fat_target_g?: number | null;
+          nutrition_tracking_enabled?: boolean;
+          onboarding_completed_at?: string | null;
+          deleted_at?: string | null;
+        };
       };
       workout_sessions: {
         Row: {
