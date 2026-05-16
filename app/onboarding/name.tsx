@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -33,7 +32,6 @@ export default function NameScreen() {
       step={1} total={13}
       title="What's your name?"
       subtitle="We'll use this to personalise your experience."
-      onBack={() => router.back()}
       footer={<Button label="Continue" onPress={handleSubmit(onNext)} />}
     >
       <View style={{ marginTop: spacing[2] }}>

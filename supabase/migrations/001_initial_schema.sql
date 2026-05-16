@@ -3,7 +3,6 @@
 -- ============================================================
 
 -- Extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm"; -- for LIKE/iLIKE search performance
 
 -- ============================================================
@@ -23,7 +22,7 @@ CREATE TYPE team_role_enum AS ENUM ('admin', 'member');
 -- USERS
 -- ============================================================
 CREATE TABLE users (
-  id                            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email                         text UNIQUE NOT NULL,
   display_name                  text,
   unit_system                   unit_system_enum NOT NULL DEFAULT 'imperial',
@@ -53,7 +52,7 @@ CREATE TABLE users (
 -- EXERCISES
 -- ============================================================
 CREATE TABLE exercises (
-  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name            text NOT NULL,
   muscle_primary  text[] NOT NULL DEFAULT '{}',
   muscle_secondary text[] NOT NULL DEFAULT '{}',
@@ -70,7 +69,7 @@ CREATE INDEX idx_ex_created_by  ON exercises(created_by) WHERE created_by IS NOT
 -- WORKOUT SESSIONS
 -- ============================================================
 CREATE TABLE workout_sessions (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name        text,
   started_at  timestamptz NOT NULL DEFAULT now(),
@@ -81,7 +80,7 @@ CREATE TABLE workout_sessions (
 CREATE INDEX idx_ws_user_date ON workout_sessions(user_id, started_at DESC);
 
 CREATE TABLE session_exercises (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id  uuid NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
   exercise_id uuid NOT NULL REFERENCES exercises(id),
   "order"     int NOT NULL DEFAULT 0,
@@ -91,7 +90,7 @@ CREATE TABLE session_exercises (
 CREATE INDEX idx_se_session ON session_exercises(session_id, "order");
 
 CREATE TABLE sets (
-  id                    uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   session_exercise_id   uuid NOT NULL REFERENCES session_exercises(id) ON DELETE CASCADE,
   set_number            int NOT NULL,
   reps                  int NOT NULL CHECK (reps BETWEEN 1 AND 999),
@@ -108,7 +107,7 @@ CREATE INDEX idx_sets_session_ex ON sets(session_exercise_id, set_number);
 -- PERSONAL RECORDS (maintained incrementally, never scanned from sets)
 -- ============================================================
 CREATE TABLE personal_records (
-  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   exercise_id  uuid NOT NULL REFERENCES exercises(id),
   rep_count    int NOT NULL,
@@ -123,7 +122,7 @@ CREATE INDEX idx_pr_user_exercise ON personal_records(user_id, exercise_id, rep_
 -- BODY STATS
 -- ============================================================
 CREATE TABLE body_stats (
-  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   weight       numeric(6,2) NOT NULL,
   unit         unit_enum NOT NULL,
@@ -136,7 +135,7 @@ CREATE INDEX idx_bs_user_date ON body_stats(user_id, recorded_at DESC);
 -- REST DAYS
 -- ============================================================
 CREATE TABLE rest_days (
-  id       uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date     date NOT NULL,
   note     text,
@@ -149,14 +148,14 @@ CREATE INDEX idx_rd_user_date ON rest_days(user_id, date);
 -- WORKOUT TEMPLATES
 -- ============================================================
 CREATE TABLE workout_templates (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name        text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE template_exercises (
-  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   template_id  uuid NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
   exercise_id  uuid NOT NULL REFERENCES exercises(id),
   "order"      int NOT NULL DEFAULT 0,
@@ -169,7 +168,7 @@ CREATE TABLE template_exercises (
 -- NUTRITION
 -- ============================================================
 CREATE TABLE foods (
-  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name                text NOT NULL,
   brand               text,
   barcode             text,
@@ -188,7 +187,7 @@ CREATE UNIQUE INDEX idx_foods_barcode    ON foods(barcode) WHERE barcode IS NOT 
 CREATE INDEX        idx_foods_name_fts   ON foods USING gin(to_tsvector('english', name));
 
 CREATE TABLE food_logs (
-  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   food_id      uuid NOT NULL REFERENCES foods(id),
   meal_type    meal_type_enum NOT NULL,
@@ -200,7 +199,7 @@ CREATE TABLE food_logs (
 CREATE INDEX idx_fl_user_date ON food_logs(user_id, date DESC);
 
 CREATE TABLE water_logs (
-  id         uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount_ml  int NOT NULL CHECK (amount_ml > 0),
   logged_at  timestamptz NOT NULL DEFAULT now(),
@@ -241,7 +240,7 @@ CREATE TABLE user_weekly_training_summary (
 -- TEAMS
 -- ============================================================
 CREATE TABLE teams (
-  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name              text NOT NULL,
   created_by        uuid NOT NULL REFERENCES users(id),
   invite_code       text UNIQUE NOT NULL,
@@ -251,7 +250,7 @@ CREATE TABLE teams (
 );
 
 CREATE TABLE team_members (
-  id             uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id        uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id        uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role           team_role_enum NOT NULL DEFAULT 'member',
@@ -264,7 +263,7 @@ CREATE INDEX idx_tm_user_id  ON team_members(user_id);
 CREATE INDEX idx_tm_team_id  ON team_members(team_id);
 
 CREATE TABLE team_reactions (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id     uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   session_id  uuid NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
   reactor_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -287,7 +286,7 @@ CREATE TABLE team_weekly_leaderboard (
 -- SUBSCRIPTIONS (RevenueCat webhook mirror)
 -- ============================================================
 CREATE TABLE user_entitlements (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   product_id  text NOT NULL,
   tier        entitlement_tier_enum NOT NULL,
@@ -300,7 +299,7 @@ CREATE TABLE user_entitlements (
 -- BACKGROUND JOBS
 -- ============================================================
 CREATE TABLE jobs (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   type        text NOT NULL,
   user_id     uuid REFERENCES users(id) ON DELETE CASCADE,
   payload     jsonb NOT NULL DEFAULT '{}',
@@ -317,7 +316,7 @@ CREATE INDEX idx_jobs_pending ON jobs(status, created_at) WHERE status = 'pendin
 -- SECURITY & RATE LIMITING
 -- ============================================================
 CREATE TABLE rate_limits (
-  id             uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id        uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   endpoint       text NOT NULL,
   window_start   timestamptz NOT NULL,
@@ -329,7 +328,7 @@ CREATE TABLE rate_limits (
 CREATE UNIQUE INDEX idx_rl_user_endpoint ON rate_limits(user_id, endpoint, window_start);
 
 CREATE TABLE security_audit_log (
-  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     uuid,
   event_type  text NOT NULL,
   ip_hash     text,

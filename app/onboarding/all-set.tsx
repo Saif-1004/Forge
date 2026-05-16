@@ -59,12 +59,13 @@ export default function AllSetScreen() {
           onboarding_completed_at: new Date().toISOString(),
         });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) { console.error('Supabase upsert error:', JSON.stringify(upsertError)); throw upsertError; }
 
       reset();
       setOnboardingCompleted(true);
       router.replace('/(tabs)');
     } catch (e: any) {
+      console.error('Onboarding save error:', JSON.stringify(e));
       setError('Something went wrong. Please try again.');
       setSaving(false);
     }

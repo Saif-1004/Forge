@@ -28,7 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       .from('users')
       .select('onboarding_completed_at')
       .eq('id', session.user.id)
-      .single();
+      .maybeSingle() as { data: { onboarding_completed_at: string | null } | null };
 
     set({
       session,
