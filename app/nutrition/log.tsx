@@ -23,6 +23,7 @@ import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { database } from '@/lib/watermelon/database';
 import type { FoodLog, Food } from '@/lib/watermelon/models';
+import { Eyebrow } from '@/components/ui';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 type Mode = 'search' | 'scan' | 'photo';
@@ -441,9 +442,7 @@ export default function LogFoodScreen() {
             </View>
           )}
 
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[3] }}>
-            {formInitial?.name ? 'EDIT DETAILS' : 'MANUAL ENTRY'}
-          </Text>
+          <Eyebrow style={{ marginBottom: spacing[3] }}>{formInitial?.name ? 'Edit Details' : 'Manual Entry'}</Eyebrow>
           <EntryForm initial={formInitial} onLog={handleLog} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} />
         </ScrollView>
       )}
@@ -518,7 +517,7 @@ export default function LogFoodScreen() {
           ) : photoResult ? (
             <>
               {photoUri && <Image source={{ uri: photoUri }} style={{ width: '100%', height: 180, borderRadius: radius.xl, marginBottom: spacing[4], resizeMode: 'cover' }} />}
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[3] }}>VERIFY & ADJUST</Text>
+              <Eyebrow style={{ marginBottom: spacing[3] }}>Verify & Adjust</Eyebrow>
               <EntryForm initial={photoResult} onLog={handleLog} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} />
               <Pressable onPress={() => { setPhotoResult(null); setPhotoUri(null); }} style={({ pressed }) => [{ alignItems: 'center', marginTop: spacing[3], opacity: pressed ? 0.6 : 1 }]}>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Try a different photo</Text>

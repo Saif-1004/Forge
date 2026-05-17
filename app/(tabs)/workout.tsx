@@ -8,7 +8,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useSyncStore } from '@/store/syncStore';
 import { database } from '@/lib/watermelon/database';
-import type { WorkoutSession, SessionExercise, WorkoutTemplate, TemplateExercise, Exercise } from '@/lib/watermelon/models';
+import type { WorkoutSession, SessionExercise, WorkoutTemplate, TemplateExercise, Exercise, Set as SetModel } from '@/lib/watermelon/models';
+import { Chip } from '@/components/ui';
 
 interface TemplateCard {
   id: string;
@@ -105,25 +106,42 @@ export default function WorkoutTab() {
         )
         .fetch();
 
-      const rows = await Promise.all(
-        raw.map(async (s) => {
-          const ses = await seCollection
-            .query(Q.where('session_id', s.id), Q.where('is_deleted', false))
-            .fetch();
-          let totalSets = 0;
-          for (const se of ses) {
-            const sets = await se.sets.fetch();
-            totalSets += sets.filter((set) => !set.isDeleted).length;
-          }
-          return {
-            id: s.id,
-            startedAt: s.startedAt,
-            endedAt: s.endedAt as number,
-            exerciseCount: ses.length,
-            setCount: totalSets,
-          };
-        }),
-      );
+      if (raw.length === 0) { setAllSessions([]); setLoadingHistory(false); return; }
+
+      const sessionIds = raw.map((s) => s.id);
+      const setsCollection = database.collections.get<SetModel>('sets');
+
+      const allSEs = await seCollection
+        .query(Q.where('session_id', Q.oneOf(sessionIds)), Q.where('is_deleted', false))
+        .fetch();
+
+      const seIds = allSEs.map((se) => se.id);
+      const allSets = seIds.length > 0
+        ? await setsCollection.query(Q.where('session_exercise_id', Q.oneOf(seIds))).fetch()
+        : [];
+
+      const sesBySession = new Map<string, number>();
+      const seToSession = new Map<string, string>();
+      for (const se of allSEs) {
+        sesBySession.set(se.sessionId, (sesBySession.get(se.sessionId) ?? 0) + 1);
+        seToSession.set(se.id, se.sessionId);
+      }
+
+      const setCountBySession = new Map<string, number>();
+      for (const set of allSets) {
+        if (!set.isDeleted) {
+          const sid = seToSession.get(set.sessionExerciseId);
+          if (sid) setCountBySession.set(sid, (setCountBySession.get(sid) ?? 0) + 1);
+        }
+      }
+
+      const rows = raw.map((s) => ({
+        id: s.id,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt as number,
+        exerciseCount: sesBySession.get(s.id) ?? 0,
+        setCount: setCountBySession.get(s.id) ?? 0,
+      }));
 
       setAllSessions(rows);
       setLoadingHistory(false);
@@ -385,32 +403,14 @@ export default function WorkoutTab() {
 
       {/* Date filter chips */}
       <View style={[styles.filterRow, { marginBottom: spacing[4] }]}>
-        {DATE_FILTERS.map((f) => {
-          const active = dateFilter === f.key;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => setDateFilter(f.key)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: active ? colors.text : colors.surface,
-                  borderRadius: radius.full,
-                  paddingHorizontal: spacing[3],
-                  paddingVertical: spacing[1],
-                },
-              ]}
-            >
-              <Text style={{
-                color: active ? colors.background : colors.textMuted,
-                fontSize: fontSize.xs,
-                fontWeight: active ? fontWeight.semibold : fontWeight.normal,
-              }}>
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {DATE_FILTERS.map((f) => (
+          <Chip
+            key={f.key}
+            label={f.label}
+            active={dateFilter === f.key}
+            onPress={() => setDateFilter(f.key)}
+          />
+        ))}
       </View>
 
       {loadingHistory ? (
@@ -459,7 +459,6 @@ const styles = StyleSheet.create({
   startBtn: {},
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   filterRow: { flexDirection: 'row', gap: 8 },
-  chip: {},
   sessionCard: {},
   sessionRow: { flexDirection: 'row', alignItems: 'center' },
 });

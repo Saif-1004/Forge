@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { scheduleWorkoutReminder, cancelWorkoutReminder, requestNotificationPermissions } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase/client';
+import { Eyebrow } from '@/components/ui';
 
 const REST_PRESETS = [
   { label: '30s', seconds: 30 },
@@ -144,7 +145,7 @@ export default function ProfileTab() {
       </Text>
 
       {/* Display name */}
-      <SectionLabel label="DISPLAY NAME" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <Eyebrow>Display Name</Eyebrow>
       <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[4] }]}>
         {editingName ? (
           <>
@@ -184,13 +185,13 @@ export default function ProfileTab() {
       </View>
 
       {/* Email */}
-      <SectionLabel label="EMAIL" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <Eyebrow>Email</Eyebrow>
       <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[4] }]}>
         <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>{user?.email}</Text>
       </View>
 
       {/* Unit preference */}
-      <SectionLabel label="WEIGHT UNIT" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <Eyebrow>Weight Unit</Eyebrow>
       <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[2], paddingVertical: spacing[2], marginBottom: spacing[6], gap: spacing[2] }]}>
         {(['kg', 'lbs'] as const).map((opt) => {
           const active = unitPreference === opt;
@@ -226,7 +227,7 @@ export default function ProfileTab() {
       </View>
 
       {/* Rest timer default */}
-      <SectionLabel label="DEFAULT REST TIMER" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <Eyebrow>Default Rest Timer</Eyebrow>
       <View style={[styles.row, { flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[6] }]}>
         {REST_PRESETS.map((p) => {
           const active = defaultRestSeconds === p.seconds;
@@ -253,7 +254,7 @@ export default function ProfileTab() {
       </View>
 
       {/* Workout reminders */}
-      <SectionLabel label="WORKOUT REMINDERS" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <Eyebrow>Workout Reminders</Eyebrow>
       <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[2] }]}>
         <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Daily Reminder</Text>
         <Switch
@@ -293,7 +294,7 @@ export default function ProfileTab() {
       )}
 
       {/* Nutrition goals */}
-      <SectionLabel label="NUTRITION GOALS" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <Eyebrow>Nutrition Goals</Eyebrow>
       {editingGoals ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[6] }}>
           <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] }}>
@@ -352,14 +353,6 @@ export default function ProfileTab() {
       <View style={{ height: spacing[3] }} />
       <DangerButton label="Delete account" onPress={handleDeleteAccount} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} destructive />
     </ScrollView>
-  );
-}
-
-function SectionLabel({ label, colors, fontSize, spacing }: { label: string; colors: any; fontSize: any; spacing: any }) {
-  return (
-    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[2] }}>
-      {label}
-    </Text>
   );
 }
 

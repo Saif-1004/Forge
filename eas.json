@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -39,8 +40,8 @@
     "production": {
       "ios": {
         "appleId": "saif-shah645@hotmail.co.uk",
-        "ascAppId": "FILL_IN_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "FILL_IN_APPLE_TEAM_ID"
+        "ascAppId": "6770353063",
+        "appleTeamId": "VAXZV28FD2"
       },
       "android": {
         "serviceAccountKeyPath": "../secrets/google-play-service-account.json",

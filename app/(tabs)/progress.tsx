@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import type { PersonalRecord, Exercise, WorkoutSession, SessionExercise, Set as SetModel, BodyWeightLog } from '@/lib/watermelon/models';
+import { Eyebrow } from '@/components/ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -453,9 +454,7 @@ export default function ProgressTab() {
                 </View>
               </View>
 
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[3] }}>
-                PERSONAL RECORDS
-              </Text>
+              <Eyebrow style={{ marginBottom: spacing[3] }}>Personal Records</Eyebrow>
 
               {data.prs.map((entry) => {
                 const isOpen = expanded.has(entry.exerciseId);

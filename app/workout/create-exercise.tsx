@@ -12,6 +12,7 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import type { Exercise, SessionExercise } from '@/lib/watermelon/models';
+import { Eyebrow, Chip } from '@/components/ui';
 
 const MUSCLE_OPTIONS = [
   'chest', 'lats', 'mid_back', 'lower_back',
@@ -125,7 +126,7 @@ export default function CreateExerciseScreen() {
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing[5], paddingTop: spacing[5], paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         {/* Name */}
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[2] }}>EXERCISE NAME *</Text>
+        <Eyebrow>Exercise Name *</Eyebrow>
         <TextInput
           value={name}
           onChangeText={(v) => { setName(v); setNameError(null); }}
@@ -137,26 +138,21 @@ export default function CreateExerciseScreen() {
         {nameError && <Text style={{ color: colors.danger, fontSize: fontSize.xs, marginBottom: spacing[4] }}>{nameError}</Text>}
 
         {/* Primary muscle */}
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[3] }}>PRIMARY MUSCLE *</Text>
+        <Eyebrow style={{ marginBottom: spacing[3] }}>Primary Muscle *</Eyebrow>
         <View style={[styles.chipWrap, { marginBottom: spacing[5] }]}>
-          {MUSCLE_OPTIONS.map((m) => {
-            const active = primaryMuscle === m;
-            return (
-              <Pressable
-                key={m}
-                onPress={() => setPrimaryMuscle(m)}
-                style={[styles.chip, { backgroundColor: active ? colors.text : colors.surface, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }]}
-              >
-                <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm }}>
-                  {MUSCLE_GROUP_LABELS[m] ?? m}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {MUSCLE_OPTIONS.map((m) => (
+            <Chip
+              key={m}
+              label={MUSCLE_GROUP_LABELS[m] ?? m}
+              active={primaryMuscle === m}
+              onPress={() => setPrimaryMuscle(m)}
+              style={{ paddingVertical: spacing[2] }}
+            />
+          ))}
         </View>
 
         {/* Secondary muscles */}
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[3] }}>SECONDARY MUSCLES <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
+        <Eyebrow style={{ marginBottom: spacing[3] }}>Secondary Muscles{' '}<Text style={{ fontWeight: '400', textTransform: 'none' }}>(optional)</Text></Eyebrow>
         <View style={[styles.chipWrap, { marginBottom: spacing[5] }]}>
           {MUSCLE_OPTIONS.filter((m) => m !== primaryMuscle).map((m) => {
             const active = secondaryMuscles.includes(m);
@@ -175,20 +171,17 @@ export default function CreateExerciseScreen() {
         </View>
 
         {/* Equipment */}
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, marginBottom: spacing[3] }}>EQUIPMENT <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
+        <Eyebrow style={{ marginBottom: spacing[3] }}>Equipment{' '}<Text style={{ fontWeight: '400', textTransform: 'none' }}>(optional)</Text></Eyebrow>
         <View style={[styles.chipWrap, { marginBottom: spacing[5] }]}>
-          {EQUIPMENT_OPTIONS.map((e) => {
-            const active = equipment === e;
-            return (
-              <Pressable
-                key={e}
-                onPress={() => setEquipment(active ? null : e)}
-                style={[styles.chip, { backgroundColor: active ? colors.text : colors.surface, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }]}
-              >
-                <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm }}>{e}</Text>
-              </Pressable>
-            );
-          })}
+          {EQUIPMENT_OPTIONS.map((e) => (
+            <Chip
+              key={e}
+              label={e}
+              active={equipment === e}
+              onPress={() => setEquipment(equipment === e ? null : e)}
+              style={{ paddingVertical: spacing[2] }}
+            />
+          ))}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

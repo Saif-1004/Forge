@@ -30,20 +30,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
     set({ isLoading: true });
-    const { data } = await supabase
-      .from('users')
-      .select('onboarding_completed_at, unit_system, display_name')
-      .eq('id', session.user.id)
-      .maybeSingle() as { data: { onboarding_completed_at: string | null; unit_system: 'imperial' | 'metric' | null; display_name: string | null } | null };
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('onboarding_completed_at, unit_system, display_name')
+        .eq('id', session.user.id)
+        .maybeSingle() as { data: { onboarding_completed_at: string | null; unit_system: 'imperial' | 'metric' | null; display_name: string | null } | null };
 
-    set({
-      session,
-      user: session.user,
-      isLoading: false,
-      onboardingCompleted: !!data?.onboarding_completed_at,
-      unitPreference: data?.unit_system === 'metric' ? 'kg' : 'lbs',
-      displayName: data?.display_name ?? null,
-    });
+      set({
+        session,
+        user: session.user,
+        onboardingCompleted: !!data?.onboarding_completed_at,
+        unitPreference: data?.unit_system === 'metric' ? 'kg' : 'lbs',
+        displayName: data?.display_name ?? null,
+      });
+    } finally {
+      set({ isLoading: false });
+    }
   },
 
   setOnboardingCompleted: (value) => set({ onboardingCompleted: value }),

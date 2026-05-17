@@ -36,10 +36,6 @@ export default function RootLayout() {
       }
     }).catch(() => {});
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         await setSession(session);

@@ -31,18 +31,23 @@ export default function VerifyScreen() {
     if (value.length < 6) return;
     setError(null);
     setVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: value,
-      type: 'email',
-    });
-    if (error) {
-      setError('Invalid code. Please check and try again.');
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: value,
+        type: 'email',
+      });
+      if (error) {
+        setError('Invalid code. Please check and try again.');
+        setCode('');
+      }
+      // Success: onAuthStateChange fires SIGNED_IN and handles navigation
+    } catch {
+      setError('Something went wrong. Please try again.');
       setCode('');
+    } finally {
       setVerifying(false);
     }
-    // On success: onAuthStateChange in _layout.tsx fires SIGNED_IN,
-    // awaits setSession (profile query), then navigates to onboarding or tabs
   };
 
   const handleChange = (value: string) => {

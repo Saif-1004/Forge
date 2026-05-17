@@ -19,6 +19,7 @@ import { useSyncStore } from '@/store/syncStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
+import { Eyebrow } from '@/components/ui';
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -203,9 +204,7 @@ function RestTimerPanel({ secondsLeft, total, onSkip, onAdd }: RestTimerProps) {
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[2] }}>
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 0.6 }}>
-          REST
-        </Text>
+        <Eyebrow style={{ marginBottom: 0 }}>Rest</Eyebrow>
         <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, letterSpacing: -0.5 }}>
           {formatCountdown(secondsLeft)}
         </Text>

@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise, WorkoutTemplate, TemplateExercise } from '@/lib/watermelon/models';
+import { Eyebrow } from '@/components/ui';
 
 interface SetDetail {
   setNumber: number;
@@ -281,9 +282,7 @@ export default function SessionDetailScreen() {
           {groupByMuscle(detail.exercises).map(({ group, items }) => (
             <View key={group} style={{ marginBottom: spacing[5] }}>
               {/* Muscle group section header */}
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: spacing[2] }}>
-                {MUSCLE_GROUP_LABELS[group] ?? group}
-              </Text>
+              <Eyebrow>{MUSCLE_GROUP_LABELS[group] ?? group}</Eyebrow>
 
               {items.map((ex) => {
                 const isCardio = ex.musclePrimary.includes('cardio');

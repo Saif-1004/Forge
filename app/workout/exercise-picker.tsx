@@ -17,6 +17,7 @@ import { database } from '@/lib/watermelon/database';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import type { Exercise, SessionExercise } from '@/lib/watermelon/models';
+import { Chip } from '@/components/ui';
 
 const ALL = 'all';
 
@@ -166,43 +167,23 @@ export default function ExercisePickerScreen() {
         contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2], alignItems: 'center' }}
         style={{ flexShrink: 0, flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
       >
-        {FILTER_GROUPS.map((item) => {
-          const active = filter === item;
-          return (
-            <Pressable
-              key={item}
-              onPress={() => {
-                setFilter(item);
-                const x = chipOffsetsRef.current.get(item) ?? 0;
-                filterScrollRef.current?.scrollTo({ x: Math.max(0, x - spacing[5]), animated: true });
-              }}
-              onLayout={(e) => {
-                chipOffsetsRef.current.set(item, e.nativeEvent.layout.x);
-              }}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: active ? colors.text : 'transparent',
-                  borderRadius: radius.full,
-                  borderWidth: 1,
-                  borderColor: active ? colors.text : colors.border,
-                  paddingHorizontal: spacing[4],
-                  paddingVertical: spacing[2],
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: active ? colors.background : colors.text,
-                  fontSize: fontSize.sm,
-                  fontWeight: active ? fontWeight.semibold : fontWeight.normal,
-                }}
-              >
-                {item === ALL ? 'All' : MUSCLE_GROUP_LABELS[item] ?? item}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {FILTER_GROUPS.map((item) => (
+          <Chip
+            key={item}
+            label={item === ALL ? 'All' : MUSCLE_GROUP_LABELS[item] ?? item}
+            active={filter === item}
+            variant="outline"
+            onPress={() => {
+              setFilter(item);
+              const x = chipOffsetsRef.current.get(item) ?? 0;
+              filterScrollRef.current?.scrollTo({ x: Math.max(0, x - spacing[5]), animated: true });
+            }}
+            onLayout={(e) => {
+              chipOffsetsRef.current.set(item, e.nativeEvent.layout.x);
+            }}
+            style={{ paddingHorizontal: spacing[4], paddingVertical: spacing[2] }}
+          />
+        ))}
       </ScrollView>
 
       {/* Exercise list */}
@@ -270,7 +251,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
   searchInput: { },
-  filterChip: { },
   exerciseRow: { flexDirection: 'row', alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

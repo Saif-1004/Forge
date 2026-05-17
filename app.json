@@ -16,7 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.forgeapp.workout",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.forgeapp.workout",
@@ -24,7 +27,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111111"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -37,7 +44,9 @@
       "expo-apple-authentication",
       [
         "expo-camera",
-        { "cameraPermission": "Allow Forge to access your camera to scan barcodes and take food photos." }
+        {
+          "cameraPermission": "Allow Forge to access your camera to scan barcodes and take food photos."
+        }
       ],
       [
         "expo-image-picker",
@@ -56,6 +65,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "169f04a2-b5fd-4286-8980-0390d870a2b8"
+      }
     }
   }
 }

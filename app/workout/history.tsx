@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/authStore';
 import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise } from '@/lib/watermelon/models';
+import { Chip } from '@/components/ui';
 
 type DateFilter = 'all' | 'week' | 'month' | '3months';
 
@@ -241,53 +242,29 @@ export default function WorkoutHistoryScreen() {
 
       {/* Date filter chips */}
       <View style={[styles.filterRow, { paddingHorizontal: spacing[5], paddingTop: spacing[3], paddingBottom: spacing[2] }]}>
-        {DATE_FILTERS.map((f) => {
-          const active = dateFilter === f.key;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => setDateFilter(f.key)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: active ? colors.text : colors.surface,
-                  borderRadius: radius.full,
-                  paddingHorizontal: spacing[4],
-                  paddingVertical: spacing[2],
-                },
-              ]}
-            >
-              <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {DATE_FILTERS.map((f) => (
+          <Chip
+            key={f.key}
+            label={f.label}
+            active={dateFilter === f.key}
+            onPress={() => setDateFilter(f.key)}
+            style={{ paddingHorizontal: spacing[4], paddingVertical: spacing[2] }}
+          />
+        ))}
       </View>
 
       {/* Muscle group filter chips */}
       {availableMuscles.length > 0 && (
         <View style={[styles.filterRow, { paddingHorizontal: spacing[5], paddingBottom: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.border, flexWrap: 'wrap' }]}>
-          <Pressable
-            onPress={() => setMuscleFilter(null)}
-            style={[styles.chip, { backgroundColor: muscleFilter === null ? colors.text : colors.surface, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
-          >
-            <Text style={{ color: muscleFilter === null ? colors.background : colors.textMuted, fontSize: fontSize.xs }}>All muscles</Text>
-          </Pressable>
-          {availableMuscles.map((m) => {
-            const active = muscleFilter === m;
-            return (
-              <Pressable
-                key={m}
-                onPress={() => setMuscleFilter(active ? null : m)}
-                style={[styles.chip, { backgroundColor: active ? colors.text : colors.surface, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
-              >
-                <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.xs }}>
-                  {MUSCLE_GROUP_LABELS[m] ?? m}
-                </Text>
-              </Pressable>
-            );
-          })}
+          <Chip label="All muscles" active={muscleFilter === null} onPress={() => setMuscleFilter(null)} />
+          {availableMuscles.map((m) => (
+            <Chip
+              key={m}
+              label={MUSCLE_GROUP_LABELS[m] ?? m}
+              active={muscleFilter === m}
+              onPress={() => setMuscleFilter(muscleFilter === m ? null : m)}
+            />
+          ))}
         </View>
       )}
 
@@ -366,7 +343,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
   filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  chip: {},
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   sessionCard: {},
   sessionRow: { flexDirection: 'row', alignItems: 'center' },
