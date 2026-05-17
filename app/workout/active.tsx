@@ -1,0 +1,471 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { router, useNavigation } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/useTheme';
+import { useWorkoutStore, type ActiveExercise, type ActiveSet } from '@/store/workoutStore';
+import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
+
+function formatDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m ${s % 60}s`;
+  return `${s}s`;
+}
+
+// ─── Set Row ────────────────────────────────────────────────────────────────
+
+interface SetRowProps {
+  set: ActiveSet;
+  seId: string;
+  onUpdate: (seId: string, setId: string, data: Partial<ActiveSet>) => void;
+  onLog: (seId: string, setId: string) => void;
+  onDelete: (seId: string, setId: string) => void;
+}
+
+function SetRow({ set, seId, onUpdate, onLog, onDelete }: SetRowProps) {
+  const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
+  const logged = set.loggedAt !== null;
+
+  return (
+    <View
+      style={[
+        styles.setRow,
+        {
+          backgroundColor: logged ? colors.surface : colors.background,
+          borderRadius: radius.md,
+          paddingHorizontal: spacing[3],
+          paddingVertical: spacing[2],
+          marginBottom: spacing[2],
+          borderWidth: 1,
+          borderColor: logged ? colors.success + '44' : colors.border,
+        },
+      ]}
+    >
+      {/* Set number */}
+      <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, width: 24, textAlign: 'center' }}>
+        {set.setNumber}
+      </Text>
+
+      {/* Reps */}
+      <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
+        <TextInput
+          value={set.reps > 0 ? String(set.reps) : ''}
+          onChangeText={(v) => onUpdate(seId, set.id, { reps: parseInt(v) || 0 })}
+          keyboardType="number-pad"
+          editable={!logged}
+          style={[
+            styles.setInput,
+            {
+              color: logged ? colors.textMuted : colors.text,
+              backgroundColor: colors.surface,
+              fontSize: fontSize.base,
+              fontWeight: fontWeight.medium,
+              borderRadius: radius.sm,
+              textAlign: 'center',
+              paddingVertical: spacing[1],
+            },
+          ]}
+          placeholder="0"
+          placeholderTextColor={colors.textMuted}
+        />
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>reps</Text>
+      </View>
+
+      {/* Weight */}
+      <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
+        <TextInput
+          value={set.weight > 0 ? String(set.weight) : ''}
+          onChangeText={(v) => onUpdate(seId, set.id, { weight: parseFloat(v) || 0 })}
+          keyboardType="decimal-pad"
+          editable={!logged}
+          style={[
+            styles.setInput,
+            {
+              color: logged ? colors.textMuted : colors.text,
+              backgroundColor: colors.surface,
+              fontSize: fontSize.base,
+              fontWeight: fontWeight.medium,
+              borderRadius: radius.sm,
+              textAlign: 'center',
+              paddingVertical: spacing[1],
+            },
+          ]}
+          placeholder="0"
+          placeholderTextColor={colors.textMuted}
+        />
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>{set.unit}</Text>
+      </View>
+
+      {/* Actions */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', gap: spacing[2] }}>
+        {!logged ? (
+          <Pressable
+            onPress={() => onLog(seId, set.id)}
+            style={[
+              styles.logBtn,
+              {
+                backgroundColor: colors.text,
+                borderRadius: radius.md,
+                paddingHorizontal: spacing[3],
+                paddingVertical: spacing[1],
+              },
+            ]}
+          >
+            <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>
+              Log
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={{ color: colors.success, fontSize: fontSize.lg }}>✓</Text>
+        )}
+        <Pressable onPress={() => onDelete(seId, set.id)} hitSlop={8}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>×</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── Exercise Card ───────────────────────────────────────────────────────────
+
+interface ExerciseCardProps {
+  exercise: ActiveExercise;
+  onAddSet: (seId: string) => void;
+  onRemove: (seId: string) => void;
+  onUpdate: (seId: string, setId: string, data: Partial<ActiveSet>) => void;
+  onLog: (seId: string, setId: string) => void;
+  onDeleteSet: (seId: string, setId: string) => void;
+}
+
+function ExerciseCard({ exercise, onAddSet, onRemove, onUpdate, onLog, onDeleteSet }: ExerciseCardProps) {
+  const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.background,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.lg,
+          padding: spacing[4],
+          marginBottom: spacing[4],
+        },
+      ]}
+    >
+      {/* Exercise name + remove */}
+      <View style={styles.cardHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold }}>
+            {exercise.exerciseName}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: 2 }}>
+            {exercise.musclePrimary.map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ')}
+          </Text>
+        </View>
+        <Pressable onPress={() => onRemove(exercise.sessionExerciseId)} hitSlop={8}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.lg }}>×</Text>
+        </Pressable>
+      </View>
+
+      {/* Column labels */}
+      {exercise.sets.length > 0 && (
+        <View style={[styles.setRow, { paddingHorizontal: spacing[3], marginBottom: spacing[1] }]}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 24, textAlign: 'center' }}>#</Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Reps</Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 64, textAlign: 'center', marginLeft: spacing[3] }}>Weight</Text>
+        </View>
+      )}
+
+      {/* Sets */}
+      {exercise.sets.map((s) => (
+        <SetRow
+          key={s.id}
+          set={s}
+          seId={exercise.sessionExerciseId}
+          onUpdate={onUpdate}
+          onLog={onLog}
+          onDelete={onDeleteSet}
+        />
+      ))}
+
+      {/* Add Set */}
+      <Pressable
+        onPress={() => onAddSet(exercise.sessionExerciseId)}
+        style={[
+          styles.addSetBtn,
+          {
+            borderColor: colors.border,
+            borderRadius: radius.md,
+            paddingVertical: spacing[2],
+            marginTop: spacing[1],
+          },
+        ]}
+      >
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>+ Add Set</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Active Workout Screen ────────────────────────────────────────────────────
+
+export default function ActiveWorkoutScreen() {
+  const { colors, fontSize, fontWeight, spacing } = useTheme();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const {
+    exercises,
+    isPaused,
+    getElapsed,
+    pauseSession,
+    resumeSession,
+    removeExercise,
+    addSet,
+    updateSet,
+    logSet,
+    deleteSet,
+    finishSession,
+    discardSession,
+  } = useWorkoutStore();
+
+  const [elapsed, setElapsed] = useState(getElapsed);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Tick every second when running
+  useEffect(() => {
+    if (isPaused) {
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      setElapsed(getElapsed());
+      return;
+    }
+    const tick = () => setElapsed(getElapsed());
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isPaused, getElapsed]);
+
+  // Resume timer when screen gains focus (coming back from exercise-picker)
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      if (!isPaused) setElapsed(getElapsed());
+    });
+    return unsub;
+  }, [navigation, isPaused, getElapsed]);
+
+  // Intercept back navigation
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e) => {
+      // Allow programmatic replaces (finish/discard handlers call router.replace)
+      if ((e.data.action as { type: string }).type === 'REPLACE') return;
+      e.preventDefault();
+      Alert.alert(
+        'Leave workout?',
+        isPaused ? 'Timer is paused. What would you like to do?' : 'What would you like to do with your workout?',
+        [
+          { text: 'Keep Going', style: 'cancel' },
+          {
+            text: isPaused ? 'Go Back (Timer Paused)' : 'Pause Timer & Go Back',
+            onPress: () => {
+              if (!isPaused) pauseSession();
+              navigation.dispatch(e.data.action);
+            },
+          },
+          {
+            text: 'End Workout',
+            onPress: () => {
+              const totalLogged = exercises.reduce(
+                (acc, ex) => acc + ex.sets.filter((s) => s.loggedAt !== null).length, 0,
+              );
+              Alert.alert(
+                'End Workout?',
+                totalLogged === 0 ? 'No sets logged yet.' : `${totalLogged} set${totalLogged !== 1 ? 's' : ''} logged.`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'End',
+                    onPress: async () => {
+                      await finishSession();
+                      router.replace('/(tabs)/workout');
+                    },
+                  },
+                ],
+              );
+            },
+          },
+        ],
+      );
+    });
+    return unsub;
+  }, [navigation, isPaused, pauseSession, exercises, finishSession]);
+
+  const handleFinish = useCallback(() => {
+    const totalLogged = exercises.reduce((acc, ex) => acc + ex.sets.filter((s) => s.loggedAt !== null).length, 0);
+    Alert.alert(
+      'Finish Workout?',
+      totalLogged === 0 ? 'No sets logged yet.' : `${totalLogged} set${totalLogged !== 1 ? 's' : ''} logged.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Finish',
+          onPress: async () => {
+            await finishSession();
+            router.replace('/(tabs)/workout');
+          },
+        },
+      ],
+    );
+  }, [exercises, finishSession]);
+
+  const handleDiscard = useCallback(() => {
+    Alert.alert('Discard Workout?', 'This will delete all sets logged in this session.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: async () => {
+          await discardSession();
+          router.replace('/(tabs)/workout');
+        },
+      },
+    ]);
+  }, [discardSession]);
+
+  const handleRemoveExercise = useCallback(
+    (seId: string) => {
+      Alert.alert('Remove Exercise?', 'All sets for this exercise will be deleted.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => removeExercise(seId) },
+      ]);
+    },
+    [removeExercise],
+  );
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + 12,
+            paddingBottom: spacing[3],
+            paddingHorizontal: spacing[5],
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        {/* Timer + pause toggle */}
+        <Pressable onPress={isPaused ? resumeSession : pauseSession} hitSlop={8}>
+          <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold }}>
+            {formatDuration(elapsed)}
+          </Text>
+          <Text style={{ color: isPaused ? colors.warning : colors.success, fontSize: fontSize.xs, marginTop: 1 }}>
+            {isPaused ? '⏸ Paused — tap to resume' : '▶ Running'}
+          </Text>
+        </Pressable>
+
+        <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+          <Pressable onPress={handleDiscard} hitSlop={8}>
+            <Text style={{ color: colors.error, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>Discard</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleFinish}
+            style={[
+              styles.finishBtn,
+              { backgroundColor: colors.text, paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
+            ]}
+          >
+            <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>
+              Finish
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Exercise list */}
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: spacing[5],
+          paddingTop: spacing[5],
+          paddingBottom: insets.bottom + 100,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {exercises.length === 0 ? (
+          <View style={[styles.empty, { marginTop: spacing[16] }]}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.base, textAlign: 'center' }}>
+              No exercises added yet.{'\n'}Tap below to get started.
+            </Text>
+          </View>
+        ) : (
+          exercises.map((ex) => (
+            <ExerciseCard
+              key={ex.sessionExerciseId}
+              exercise={ex}
+              onAddSet={addSet}
+              onRemove={handleRemoveExercise}
+              onUpdate={updateSet}
+              onLog={logSet}
+              onDeleteSet={deleteSet}
+            />
+          ))
+        )}
+      </ScrollView>
+
+      {/* Add Exercise FAB */}
+      <View
+        style={[
+          styles.fab,
+          {
+            bottom: insets.bottom + 24,
+            left: spacing[5],
+            right: spacing[5],
+            backgroundColor: colors.text,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => router.push('/workout/exercise-picker')}
+          style={{ paddingVertical: spacing[4], alignItems: 'center' }}
+        >
+          <Text style={{ color: colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
+            + Add Exercise
+          </Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  card: {},
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  setRow: { flexDirection: 'row', alignItems: 'center' },
+  inputWrap: { alignItems: 'center', width: 56 },
+  setInput: { width: '100%' },
+  logBtn: {},
+  addSetBtn: { borderWidth: 1, borderStyle: 'dashed', alignItems: 'center' },
+  finishBtn: { borderRadius: 8 },
+  fab: { position: 'absolute', borderRadius: 12 },
+  empty: { alignItems: 'center' },
+});

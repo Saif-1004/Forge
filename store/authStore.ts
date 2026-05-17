@@ -7,7 +7,7 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   onboardingCompleted: boolean;
-  setSession: (session: Session | null) => void;
+  setSession: (session: Session | null) => Promise<void>;
   setOnboardingCompleted: (value: boolean) => void;
   signOut: () => Promise<void>;
 }
@@ -23,6 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ session: null, user: null, isLoading: false, onboardingCompleted: false });
       return;
     }
+    set({ isLoading: true });
     // Check whether this user has already completed onboarding
     const { data } = await supabase
       .from('users')

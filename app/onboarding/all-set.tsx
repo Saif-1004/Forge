@@ -59,13 +59,12 @@ export default function AllSetScreen() {
           onboarding_completed_at: new Date().toISOString(),
         });
 
-      if (upsertError) { console.error('Supabase upsert error:', JSON.stringify(upsertError)); throw upsertError; }
+      if (upsertError) throw upsertError;
 
       reset();
       setOnboardingCompleted(true);
       router.replace('/(tabs)');
-    } catch (e: any) {
-      console.error('Onboarding save error:', JSON.stringify(e));
+    } catch {
       setError('Something went wrong. Please try again.');
       setSaving(false);
     }
@@ -83,7 +82,7 @@ export default function AllSetScreen() {
         />
 
         <Text style={[styles.title, { color: colors.text, fontSize: fontSize['3xl'], fontWeight: fontWeight.bold }]}>
-          You're all set{data.displayName ? `, ${data.displayName}` : ''}!
+          You&apos;re all set{data.displayName ? `, ${data.displayName}` : ''}!
         </Text>
         <Text style={[styles.subtitle, { color: colors.textMuted, fontSize: fontSize.base }]}>
           Your profile is ready. Time to start crushing your goals.

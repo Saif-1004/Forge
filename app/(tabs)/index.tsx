@@ -1,11 +1,11 @@
-import { View, Text, ScrollView } from 'react-native';
+import { Text, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/useTheme';
 
 export default function HomeTab() {
   const { colors, fontSize, fontWeight, spacing } = useTheme();
-  const { user } = useAuthStore();
+  useAuthStore();
   const insets = useSafeAreaInsets();
 
   return (

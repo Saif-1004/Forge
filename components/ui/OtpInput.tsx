@@ -69,15 +69,8 @@ function OtpBox({
 export function OtpInput({ length = 6, value, onChange }: OtpInputProps) {
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
-  const [shake, setShake] = useState(false);
-
   const digits = value.split('').slice(0, length);
   const boxSize = length <= 6 ? 48 : 40;
-
-  const triggerShake = () => {
-    setShake(true);
-    setTimeout(() => setShake(false), 200);
-  };
 
   return (
     <Pressable style={styles.container} onPress={() => inputRef.current?.focus()}>
@@ -105,7 +98,7 @@ export function OtpInput({ length = 6, value, onChange }: OtpInputProps) {
             digit={digits[i] ?? ''}
             isActive={focused && i === Math.min(digits.length, length - 1)}
             isFilled={i < digits.length}
-            shake={shake && i < digits.length}
+            shake={false}
             boxSize={boxSize}
           />
         ))}

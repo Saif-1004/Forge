@@ -41,7 +41,8 @@ export default function VerifyScreen() {
       setCode('');
       setVerifying(false);
     }
-    // On success, auth state listener in _layout.tsx fires → index.tsx redirects
+    // On success: onAuthStateChange in _layout.tsx fires SIGNED_IN,
+    // awaits setSession (profile query), then navigates to onboarding or tabs
   };
 
   const handleChange = (value: string) => {
@@ -99,7 +100,7 @@ export default function VerifyScreen() {
 
         {/* Resend */}
         <View style={[styles.resend, { marginTop: spacing[6] }]}>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Didn't get it? </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Didn&apos;t get it? </Text>
           {cooldown > 0 ? (
             <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
               Resend in {cooldown}s

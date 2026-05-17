@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { OnboardingLayout } from '@/components/onboarding/OnboardingLayout';
 import { Input } from '@/components/ui/Input';
@@ -17,7 +17,7 @@ function cmToFeetInches(cm: number): [number, number] {
 }
 
 export default function HeightScreen() {
-  const { colors, fontSize, spacing } = useTheme();
+  const { spacing } = useTheme();
   const { data, update } = useOnboardingStore();
   const isImperial = data.unitSystem === 'imperial';
 

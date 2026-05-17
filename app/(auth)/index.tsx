@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, Image, StyleSheet, Pressable, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -15,7 +15,7 @@ export default function AuthLandingScreen() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [appleLoading, setAppleLoading] = useState(false);
+  const [, setAppleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleApple = async () => {
@@ -35,8 +35,8 @@ export default function AuthLandingScreen() {
       });
       if (error) throw error;
       // Auth state listener in _layout.tsx handles redirect
-    } catch (e: any) {
-      if (e.code !== 'ERR_REQUEST_CANCELED') {
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code !== 'ERR_REQUEST_CANCELED') {
         setError('Apple sign in failed. Please try again.');
       }
     } finally {
@@ -65,7 +65,7 @@ export default function AuthLandingScreen() {
           await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
         }
       }
-    } catch (e: any) {
+    } catch {
       setError('Google sign in failed. Please try again.');
     } finally {
       setGoogleLoading(false);
@@ -75,7 +75,11 @@ export default function AuthLandingScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
-        <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: spacing[6] }}>💪</Text>
+        <Image
+          source={require('@/assets/non_pixelated_transparent.png')}
+          style={{ width: 160, height: 160, marginBottom: spacing[6], alignSelf: 'center', tintColor: colors.text }}
+          resizeMode="contain"
+        />
         <Text style={[styles.title, { color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold }]}>
           Your gym.{'\n'}Your nutrition.
         </Text>
@@ -144,8 +148,8 @@ export default function AuthLandingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 32 },
-  title: { marginBottom: 12, lineHeight: 40 },
-  subtitle: { lineHeight: 24 },
+  title: { marginBottom: 12, lineHeight: 40, textAlign: 'center' },
+  subtitle: { lineHeight: 24, textAlign: 'center' },
   footer: { gap: 0 },
   googleBtn: {
     height: 50,

@@ -1,51 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#111111"/>
 
-  <!-- Background: #111111, iOS rounded rect corner radius -->
-  <rect width="1024" height="1024" rx="224" ry="224" fill="#111111"/>
-
-  <!-- Corner brackets — Cal.ai style, L-shaped, muted grey -->
-  <path d="M 140,218 L 140,140 L 218,140" fill="none" stroke="#787878" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M 806,140 L 884,140 L 884,218" fill="none" stroke="#787878" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M 140,806 L 140,884 L 218,884" fill="none" stroke="#787878" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M 884,806 L 884,884 L 806,884" fill="none" stroke="#787878" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
-
-  <!--
-    Dumbbell + fist, rotated -30° around icon centre (512,512).
-    Pre-rotation the dumbbell is horizontal and centred at (512,512).
-    The -30° tilt fills the square canvas and reads as dynamic / lifting motion.
-
-    Composition (pre-rotation):
-      Left hex plate  — centre (260, 512), flat-top hexagon, 216×270 px
-      Right hex plate — centre (764, 512), same size, symmetric
-      Bar             — connects inner edges, 46 px tall
-      Fist            — centred ~(514, 500), knuckles on top, thumb on left
-  -->
-  <g transform="rotate(-30, 512, 512)" fill="white">
-
-    <!-- Left hexagonal weight plate -->
-    <polygon points="368,512 314,377 206,377 152,512 206,647 314,647"/>
-
-    <!-- Right hexagonal weight plate -->
-    <polygon points="656,512 710,377 818,377 872,512 818,647 710,647"/>
-
-    <!-- Bar (sleeve between plates) -->
-    <rect x="368" y="489" width="288" height="46" rx="8"/>
-
-    <!-- ── Fist ────────────────────────────────────────────────── -->
-
-    <!-- Palm body -->
-    <rect x="428" y="402" width="172" height="218" rx="22"/>
-
-    <!-- Knuckles: index, middle, ring, pinky (left to right) -->
-    <ellipse cx="450"  cy="402" rx="28" ry="34"/>
-    <ellipse cx="486"  cy="392" rx="29" ry="35"/>
-    <ellipse cx="522"  cy="390" rx="29" ry="35"/>
-    <ellipse cx="557"  cy="392" rx="25" ry="30"/>
-
-    <!-- Thumb: right hand — extends to the left of the palm -->
-    <ellipse cx="419"  cy="436" rx="26" ry="30"/>
-    <rect    x="396"   y="435" width="46" height="106" rx="22"/>
-
-  </g>
-
+  <!-- Top-left -->
+  <path d="M 175,400 L 175,175 L 400,175" fill="none" stroke="#787878" stroke-width="52" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Top-right -->
+  <path d="M 624,175 L 849,175 L 849,400" fill="none" stroke="#787878" stroke-width="52" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Bottom-left -->
+  <path d="M 175,624 L 175,849 L 400,849" fill="none" stroke="#787878" stroke-width="52" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Bottom-right -->
+  <path d="M 624,849 L 849,849 L 849,624" fill="none" stroke="#787878" stroke-width="52" stroke-linecap="square" stroke-linejoin="miter"/>
 </svg>

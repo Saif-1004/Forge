@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
 import { router } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { OnboardingLayout } from '@/components/onboarding/OnboardingLayout';
@@ -20,7 +20,7 @@ function clampDate(d: Date): Date {
 }
 
 export default function DobScreen() {
-  const { colors, fontSize, spacing } = useTheme();
+  const { colors, spacing } = useTheme();
   const { data, update } = useOnboardingStore();
 
   const defaultDate = clampDate(new Date(2000, 0, 1));

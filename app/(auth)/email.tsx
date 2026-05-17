@@ -17,7 +17,7 @@ export default function EmailScreen() {
   const insets = useSafeAreaInsets();
   const [error, setError] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors, isSubmitting }, getValues } = useForm({
+  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
   });
 
@@ -42,10 +42,10 @@ export default function EmailScreen() {
         </Pressable>
 
         <Text style={[{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, marginBottom: spacing[2] }]}>
-          What's your email?
+          What&apos;s your email?
         </Text>
         <Text style={{ color: colors.textMuted, fontSize: fontSize.base, marginBottom: spacing[8], lineHeight: 22 }}>
-          We'll send a 6-digit code to verify it's you. No password needed.
+          We&apos;ll send a 6-digit code to verify it&apos;s you. No password needed.
         </Text>
 
         <Controller

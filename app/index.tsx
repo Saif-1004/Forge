@@ -15,7 +15,7 @@ export default function Index() {
     );
   }
 
-  if (!session) return <Redirect href="/(auth)/" />;
+  if (!session) return <Redirect href="/(auth)" />;
   if (!onboardingCompleted) return <Redirect href="/onboarding/name" />;
   return <Redirect href="/(tabs)" />;
 }

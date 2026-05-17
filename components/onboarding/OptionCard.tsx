@@ -24,7 +24,7 @@ export function OptionCard({ label, description, emoji, selected, onPress, multi
 
   React.useEffect(() => {
     fill.value = withTiming(selected ? 1 : 0, { duration: 200 });
-  }, [selected]);
+  }, [selected, fill]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -83,7 +83,7 @@ function Checkmark({ visible, accentForeground }: { visible: boolean; accentFore
     scale.value = visible
       ? withSpring(1, { damping: 12, stiffness: 300 })
       : withSpring(0, { damping: 20, stiffness: 300 });
-  }, [visible]);
+  }, [visible, scale]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <Animated.Text style={[{ color: accentForeground, fontSize: 18, marginLeft: 8 }, style]}>✓</Animated.Text>
