@@ -6,8 +6,24 @@ import { Q } from '@nozbe/watermelondb';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { useSyncStore } from '@/store/syncStore';
 import { database } from '@/lib/watermelon/database';
 import type { WorkoutSession, SessionExercise } from '@/lib/watermelon/models';
+
+type DateFilter = 'week' | 'month' | 'all';
+
+const DATE_FILTERS: { key: DateFilter; label: string }[] = [
+  { key: 'week', label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'all', label: 'All Time' },
+];
+
+function getFilterCutoff(filter: DateFilter): number {
+  const now = Date.now();
+  if (filter === 'week') return now - 7 * 86400000;
+  if (filter === 'month') return now - 30 * 86400000;
+  return 0;
+}
 
 interface RecentSession {
   id: string;
@@ -43,13 +59,15 @@ function formatElapsed(ms: number): string {
 export default function WorkoutTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user } = useAuthStore();
+  const { user, unitPreference } = useAuthStore();
   const { isActive, isPaused, getElapsed, exercises, startSession } = useWorkoutStore();
+  const { status: syncStatus } = useSyncStore();
 
-  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
+  const [allSessions, setAllSessions] = useState<RecentSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [starting, setStarting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('week');
 
   // Elapsed timer for active session banner
   useEffect(() => {
@@ -61,7 +79,7 @@ export default function WorkoutTab() {
     return () => clearInterval(id);
   }, [isActive, isPaused, getElapsed]);
 
-  // Load recent sessions
+  // Load sessions (more than 5 so filters work)
   useEffect(() => {
     if (!user) return;
     const load = async () => {
@@ -74,13 +92,15 @@ export default function WorkoutTab() {
           Q.where('is_deleted', false),
           Q.where('ended_at', Q.notEq(null)),
           Q.sortBy('started_at', Q.desc),
-          Q.take(5),
+          Q.take(50),
         )
         .fetch();
 
       const rows = await Promise.all(
         raw.map(async (s) => {
-          const ses = await seCollection.query(Q.where('session_id', s.id), Q.where('is_deleted', false)).fetch();
+          const ses = await seCollection
+            .query(Q.where('session_id', s.id), Q.where('is_deleted', false))
+            .fetch();
           let totalSets = 0;
           for (const se of ses) {
             const sets = await se.sets.fetch();
@@ -96,19 +116,23 @@ export default function WorkoutTab() {
         }),
       );
 
-      setRecentSessions(rows);
+      setAllSessions(rows);
       setLoadingHistory(false);
     };
     load();
-  }, [user, isActive]);  // re-fetch when session finishes
+  }, [user, isActive]);
+
+  const filteredSessions = allSessions.filter(
+    (s) => s.startedAt >= getFilterCutoff(dateFilter),
+  );
 
   const handleStart = useCallback(async () => {
     if (!user) return;
     setStarting(true);
-    await startSession(user.id);
+    await startSession(user.id, unitPreference);
     setStarting(false);
     router.push('/workout/active');
-  }, [user, startSession]);
+  }, [user, unitPreference, startSession]);
 
   return (
     <ScrollView
@@ -119,9 +143,21 @@ export default function WorkoutTab() {
         paddingBottom: insets.bottom + 32,
       }}
     >
-      <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, marginBottom: spacing[6] }}>
-        Workout
-      </Text>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[6] }}>
+        <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold }}>
+          Workout
+        </Text>
+        {syncStatus === 'syncing' && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Syncing…</Text>
+          </View>
+        )}
+        {syncStatus === 'error' && (
+          <Text style={{ color: colors.error, fontSize: fontSize.xs }}>Sync failed</Text>
+        )}
+      </View>
 
       {/* Active session banner */}
       {isActive && (
@@ -181,8 +217,8 @@ export default function WorkoutTab() {
         </Pressable>
       )}
 
-      {/* Recent sessions */}
-      <View style={styles.sectionHeader}>
+      {/* Recent sessions header + filters */}
+      <View style={[styles.sectionHeader, { marginBottom: spacing[3] }]}>
         <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold }}>
           Recent
         </Text>
@@ -191,14 +227,44 @@ export default function WorkoutTab() {
         </Pressable>
       </View>
 
+      {/* Date filter chips */}
+      <View style={[styles.filterRow, { marginBottom: spacing[4] }]}>
+        {DATE_FILTERS.map((f) => {
+          const active = dateFilter === f.key;
+          return (
+            <Pressable
+              key={f.key}
+              onPress={() => setDateFilter(f.key)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: active ? colors.text : colors.surface,
+                  borderRadius: radius.full,
+                  paddingHorizontal: spacing[3],
+                  paddingVertical: spacing[1],
+                },
+              ]}
+            >
+              <Text style={{
+                color: active ? colors.background : colors.textMuted,
+                fontSize: fontSize.xs,
+                fontWeight: active ? fontWeight.semibold : fontWeight.normal,
+              }}>
+                {f.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {loadingHistory ? (
         <ActivityIndicator color={colors.text} style={{ marginTop: spacing[6] }} />
-      ) : recentSessions.length === 0 ? (
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.base, marginTop: spacing[4] }}>
-          No workouts yet. Start your first session above!
+      ) : filteredSessions.length === 0 ? (
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.base, marginTop: spacing[2] }}>
+          {dateFilter === 'all' ? 'No workouts yet. Start your first session above!' : 'No workouts in this period.'}
         </Text>
       ) : (
-        recentSessions.map((s) => (
+        filteredSessions.map((s) => (
           <Pressable
             key={s.id}
             onPress={() => router.push(`/workout/session/${s.id}`)}
@@ -235,7 +301,9 @@ export default function WorkoutTab() {
 const styles = StyleSheet.create({
   activeBanner: { flexDirection: 'row', alignItems: 'center' },
   startBtn: {},
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  chip: {},
   sessionCard: {},
   sessionRow: { flexDirection: 'row', alignItems: 'center' },
 });

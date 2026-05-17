@@ -116,6 +116,47 @@ export interface Database {
         };
         Relationships: [];
       };
+      rest_days: {
+        Row: {
+          id: string;
+          user_id: string;
+          date: string;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          date: string;
+          note?: string | null;
+        };
+        Update: {
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      session_exercises: {
+        Row: {
+          id: string;
+          session_id: string;
+          exercise_id: string;
+          order: number;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          exercise_id: string;
+          order?: number;
+          notes?: string | null;
+        };
+        Update: {
+          session_id?: string;
+          exercise_id?: string;
+          order?: number;
+          notes?: string | null;
+        };
+        Relationships: [];
+      };
       exercises: {
         Row: {
           id: string;

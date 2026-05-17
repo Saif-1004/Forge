@@ -31,12 +31,30 @@ interface SessionDetail {
   totalVolume: number;
 }
 
+// Group exercises by their first primary muscle
+function groupByMuscle(exercises: ExerciseDetail[]): { group: string; items: ExerciseDetail[] }[] {
+  const ORDER = ['chest', 'lats', 'mid_back', 'lower_back', 'front_delt', 'mid_delt', 'rear_delt',
+    'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'core', 'obliques', 'traps', 'forearms'];
+
+  const map = new Map<string, ExerciseDetail[]>();
+  for (const ex of exercises) {
+    const key = ex.musclePrimary[0] ?? 'other';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(ex);
+  }
+
+  const groups = Array.from(map.entries()).map(([group, items]) => ({ group, items }));
+  groups.sort((a, b) => {
+    const ai = ORDER.indexOf(a.group);
+    const bi = ORDER.indexOf(b.group);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  return groups;
+}
+
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 }
 
@@ -96,7 +114,6 @@ export default function SessionDetailScreen() {
 
           totalSets += setDetails.length;
           totalVolume += setDetails.reduce((acc, s) => acc + s.reps * s.weight, 0);
-
           exercises.push({ seId: se.id, exerciseName, musclePrimary, sets: setDetails });
         }
 
@@ -112,6 +129,7 @@ export default function SessionDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
       <View
         style={[
           styles.header,
@@ -121,9 +139,17 @@ export default function SessionDetailScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.md }}>←</Text>
         </Pressable>
-        <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold, marginLeft: spacing[3] }}>
+        <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold, marginLeft: spacing[3], flex: 1 }}>
           Session
         </Text>
+        {detail && (
+          <Pressable
+            onPress={() => router.push(`/workout/edit/${id}`)}
+            style={[styles.editBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[2] }]}
+          >
+            <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>Edit</Text>
+          </Pressable>
+        )}
       </View>
 
       {loading ? (
@@ -136,13 +162,9 @@ export default function SessionDetailScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: spacing[5],
-            paddingTop: spacing[5],
-            paddingBottom: insets.bottom + 32,
-          }}
+          contentContainerStyle={{ paddingHorizontal: spacing[5], paddingTop: spacing[5], paddingBottom: insets.bottom + 32 }}
         >
-          {/* Date + duration */}
+          {/* Date + stats row */}
           <Text style={{ color: colors.text, fontSize: fontSize.xl, fontWeight: fontWeight.bold }}>
             {formatDate(detail.startedAt)}
           </Text>
@@ -157,54 +179,58 @@ export default function SessionDetailScreen() {
             </Text>
             {detail.totalVolume > 0 && (
               <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                {detail.totalVolume.toLocaleString()} kg total
+                {detail.totalVolume.toLocaleString()} total vol
               </Text>
             )}
           </View>
 
-          {/* Exercises */}
-          {detail.exercises.map((ex) => (
-            <View
-              key={ex.seId}
-              style={[
-                styles.exerciseCard,
-                {
-                  borderColor: colors.border,
-                  borderRadius: radius.lg,
-                  padding: spacing[4],
-                  marginBottom: spacing[4],
-                },
-              ]}
-            >
-              <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold, marginBottom: 2 }}>
-                {ex.exerciseName}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: spacing[3] }}>
-                {ex.musclePrimary.map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ')}
+          {/* Exercises grouped by muscle type */}
+          {groupByMuscle(detail.exercises).map(({ group, items }) => (
+            <View key={group} style={{ marginBottom: spacing[5] }}>
+              {/* Muscle group section header */}
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: spacing[2] }}>
+                {MUSCLE_GROUP_LABELS[group] ?? group}
               </Text>
 
-              {/* Set table header */}
-              <View style={[styles.setTableRow, { marginBottom: spacing[1] }]}>
-                <Text style={[styles.setCell, { color: colors.textMuted, fontSize: fontSize.xs }]}>#</Text>
-                <Text style={[styles.setCell, styles.setCellWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Reps</Text>
-                <Text style={[styles.setCell, styles.setCellWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Weight</Text>
-                <Text style={[styles.setCell, styles.setCellWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Volume</Text>
-              </View>
+              {items.map((ex) => (
+                <View
+                  key={ex.seId}
+                  style={[
+                    styles.exerciseCard,
+                    { borderColor: colors.border, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[3] },
+                  ]}
+                >
+                  <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold, marginBottom: 2 }}>
+                    {ex.exerciseName}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: spacing[3] }}>
+                    {ex.musclePrimary.map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ')}
+                  </Text>
 
-              {ex.sets.map((s) => (
-                <View key={s.setNumber} style={[styles.setTableRow, { paddingVertical: 3 }]}>
-                  <Text style={[styles.setCell, { color: s.isWarmup ? colors.textMuted : colors.text, fontSize: fontSize.sm }]}>
-                    {s.isWarmup ? 'W' : s.setNumber}
-                  </Text>
-                  <Text style={[styles.setCell, styles.setCellWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
-                    {s.reps}
-                  </Text>
-                  <Text style={[styles.setCell, styles.setCellWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
-                    {s.weight} {s.unit}
-                  </Text>
-                  <Text style={[styles.setCell, styles.setCellWide, { color: colors.textMuted, fontSize: fontSize.sm }]}>
-                    {(s.reps * s.weight).toLocaleString()}
-                  </Text>
+                  {/* Set table */}
+                  <View style={[styles.setRow, { marginBottom: spacing[1] }]}>
+                    <Text style={[styles.setNum, { color: colors.textMuted, fontSize: fontSize.xs }]}>#</Text>
+                    <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Reps</Text>
+                    <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Weight</Text>
+                    <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Vol</Text>
+                  </View>
+
+                  {ex.sets.map((s) => (
+                    <View key={s.setNumber} style={[styles.setRow, { paddingVertical: 3 }]}>
+                      <Text style={[styles.setNum, { color: s.isWarmup ? colors.textMuted : colors.text, fontSize: fontSize.sm }]}>
+                        {s.isWarmup ? 'W' : s.setNumber}
+                      </Text>
+                      <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
+                        {s.reps}
+                      </Text>
+                      <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
+                        {s.weight} {s.unit}
+                      </Text>
+                      <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.sm }]}>
+                        {(s.reps * s.weight).toLocaleString()}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ))}
             </View>
@@ -221,7 +247,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   statsRow: { flexDirection: 'row', gap: 16 },
   exerciseCard: { borderWidth: 1 },
-  setTableRow: { flexDirection: 'row', alignItems: 'center' },
-  setCell: { width: 28, textAlign: 'center' },
-  setCellWide: { width: 64 },
+  setRow: { flexDirection: 'row', alignItems: 'center' },
+  setNum: { width: 28, textAlign: 'center' },
+  setWide: { width: 72, textAlign: 'center' },
+  editBtn: { borderWidth: 1 },
 });

@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 1,
+  version: 2,
   tables: [
     tableSchema({
       name: 'exercises',
@@ -57,6 +57,22 @@ export const schema = appSchema({
         { name: 'rpe', type: 'number', isOptional: true },
         { name: 'is_warmup', type: 'boolean' },
         { name: 'completed_at', type: 'number' }, // unix ms
+        { name: 'is_deleted', type: 'boolean' },
+        { name: 'synced_at', type: 'number', isOptional: true },
+      ],
+    }),
+
+    tableSchema({
+      name: 'personal_records',
+      columns: [
+        { name: 'remote_id', type: 'string', isOptional: true },
+        { name: 'user_id', type: 'string' },
+        { name: 'exercise_id', type: 'string' },
+        { name: 'exercise_remote_id', type: 'string', isOptional: true },
+        { name: 'rep_count', type: 'number' },
+        { name: 'weight', type: 'number' },
+        { name: 'unit', type: 'string' },
+        { name: 'achieved_at', type: 'number' },
         { name: 'is_deleted', type: 'boolean' },
         { name: 'synced_at', type: 'number', isOptional: true },
       ],

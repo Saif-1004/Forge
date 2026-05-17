@@ -4,17 +4,19 @@ import {
   Text,
   TextInput,
   FlatList,
+  ScrollView,
   Pressable,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Q } from '@nozbe/watermelondb';
 import { useTheme } from '@/hooks/useTheme';
 import { database } from '@/lib/watermelon/database';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
-import type { Exercise } from '@/lib/watermelon/models';
+import type { Exercise, SessionExercise } from '@/lib/watermelon/models';
 
 const ALL = 'all';
 
@@ -39,6 +41,7 @@ const FILTER_GROUPS = [
 export default function ExercisePickerScreen() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
+  const { editSessionId } = useLocalSearchParams<{ editSessionId?: string }>();
   const { addExercise, exercises: activeExercises } = useWorkoutStore();
 
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
@@ -47,6 +50,7 @@ export default function ExercisePickerScreen() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<string | null>(null);
 
+  // For active session: block re-adding already-added exercises
   const activeIds = new Set(activeExercises.map((e) => e.exerciseId));
 
   useEffect(() => {
@@ -70,15 +74,38 @@ export default function ExercisePickerScreen() {
   const handleAdd = useCallback(
     async (ex: Exercise) => {
       setAdding(ex.id);
-      await addExercise({
-        id: ex.id,
-        name: ex.name,
-        musclePrimary: ex.musclePrimary,
-      });
-      setAdding(null);
+      try {
+        if (editSessionId) {
+          // Adding to a past (edit) session — write directly to DB
+          const seCol = database.collections.get<SessionExercise>('session_exercises');
+          const existingSes = await seCol
+            .query(Q.where('session_id', editSessionId), Q.where('is_deleted', false))
+            .fetchCount();
+          await database.write(async () => {
+            await seCol.create((record) => {
+              record.sessionId = editSessionId;
+              record.exerciseId = ex.id;
+              record.exerciseRemoteId = ex.remoteId;
+              record.orderIndex = existingSes;
+              record.notes = null;
+              record.isDeleted = false;
+              record.remoteId = null;
+              record.syncedAt = null;
+            });
+          });
+        } else {
+          await addExercise({
+            id: ex.id,
+            name: ex.name,
+            musclePrimary: ex.musclePrimary,
+          });
+        }
+      } finally {
+        setAdding(null);
+      }
       router.back();
     },
-    [addExercise],
+    [addExercise, editSessionId],
   );
 
   return (
@@ -122,23 +149,25 @@ export default function ExercisePickerScreen() {
       </View>
 
       {/* Muscle group filters */}
-      <FlatList
+      <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={FILTER_GROUPS}
-        keyExtractor={(item) => item}
-        contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2] }}
-        style={{ flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
-        renderItem={({ item }) => {
+        contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2], alignItems: 'center' }}
+        style={{ flexShrink: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
+      >
+        {FILTER_GROUPS.map((item) => {
           const active = filter === item;
           return (
             <Pressable
+              key={item}
               onPress={() => setFilter(item)}
               style={[
                 styles.filterChip,
                 {
-                  backgroundColor: active ? colors.text : colors.surface,
+                  backgroundColor: active ? colors.text : 'transparent',
                   borderRadius: radius.full,
+                  borderWidth: 1,
+                  borderColor: active ? colors.text : colors.border,
                   paddingHorizontal: spacing[4],
                   paddingVertical: spacing[2],
                 },
@@ -146,7 +175,7 @@ export default function ExercisePickerScreen() {
             >
               <Text
                 style={{
-                  color: active ? colors.background : colors.textMuted,
+                  color: active ? colors.background : colors.text,
                   fontSize: fontSize.sm,
                   fontWeight: active ? fontWeight.semibold : fontWeight.normal,
                 }}
@@ -155,8 +184,8 @@ export default function ExercisePickerScreen() {
               </Text>
             </Pressable>
           );
-        }}
-      />
+        })}
+      </ScrollView>
 
       {/* Exercise list */}
       {loading ? (
@@ -167,6 +196,7 @@ export default function ExercisePickerScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
+          style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: spacing[5], paddingBottom: insets.bottom + 24 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border }} />}
           renderItem={({ item }) => {

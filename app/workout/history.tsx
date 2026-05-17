@@ -1,12 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Animated,
+} from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Q } from '@nozbe/watermelondb';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { database } from '@/lib/watermelon/database';
-import type { WorkoutSession, SessionExercise, Set as SetModel } from '@/lib/watermelon/models';
+import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
+import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise } from '@/lib/watermelon/models';
 
 type DateFilter = 'all' | 'week' | 'month' | '3months';
 
@@ -16,7 +27,7 @@ interface SessionRow {
   endedAt: number | null;
   exerciseCount: number;
   setCount: number;
-  primaryExercises: string[];
+  muscleGroups: string[];
 }
 
 const DATE_FILTERS: { key: DateFilter; label: string }[] = [
@@ -40,7 +51,12 @@ function formatDate(ms: number): string {
   const diff = Math.floor((now.getTime() - ms) / 86400000);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: diff > 300 ? 'numeric' : undefined });
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: diff > 300 ? 'numeric' : undefined,
+  });
 }
 
 function formatDuration(startMs: number, endMs: number): string {
@@ -50,10 +66,11 @@ function formatDuration(startMs: number, endMs: number): string {
 }
 
 async function loadSessions(userId: string): Promise<SessionRow[]> {
-  const sessionsCollection = database.collections.get<WorkoutSession>('workout_sessions');
-  const seCollection = database.collections.get<SessionExercise>('session_exercises');
+  const sessionsCol = database.collections.get<WorkoutSession>('workout_sessions');
+  const seCol = database.collections.get<SessionExercise>('session_exercises');
+  const exCol = database.collections.get<Exercise>('exercises');
 
-  const raw = await sessionsCollection
+  const raw = await sessionsCol
     .query(
       Q.where('user_id', userId),
       Q.where('is_deleted', false),
@@ -64,14 +81,20 @@ async function loadSessions(userId: string): Promise<SessionRow[]> {
 
   return Promise.all(
     raw.map(async (session) => {
-      const ses = await seCollection
+      const ses = await seCol
         .query(Q.where('session_id', session.id), Q.where('is_deleted', false))
         .fetch();
 
       let totalSets = 0;
+      const muscleSet = new Set<string>();
+
       for (const se of ses) {
         const sets = await se.sets.fetch() as SetModel[];
         totalSets += sets.filter((s) => !s.isDeleted).length;
+        try {
+          const ex = await exCol.find(se.exerciseId);
+          ex.musclePrimary.forEach((m) => muscleSet.add(m));
+        } catch {}
       }
 
       return {
@@ -80,36 +103,54 @@ async function loadSessions(userId: string): Promise<SessionRow[]> {
         endedAt: session.endedAt,
         exerciseCount: ses.length,
         setCount: totalSets,
-        primaryExercises: [],
+        muscleGroups: Array.from(muscleSet),
       };
     }),
   );
 }
 
 async function deleteSession(sessionId: string): Promise<void> {
-  const sessionsCollection = database.collections.get<WorkoutSession>('workout_sessions');
-  const seCollection = database.collections.get<SessionExercise>('session_exercises');
+  const sessionsCol = database.collections.get<WorkoutSession>('workout_sessions');
+  const seCol = database.collections.get<SessionExercise>('session_exercises');
 
   await database.write(async () => {
-    const ses = await seCollection.query(Q.where('session_id', sessionId)).fetch();
+    const ses = await seCol.query(Q.where('session_id', sessionId)).fetch();
     for (const se of ses) {
       const sets = await se.sets.fetch() as SetModel[];
       for (const s of sets) await s.destroyPermanently();
       await se.destroyPermanently();
     }
-    const session = await sessionsCollection.find(sessionId);
+    const session = await sessionsCol.find(sessionId);
     await session.destroyPermanently();
   });
+}
+
+function DeleteAction({ onPress, dragX }: { onPress: () => void; dragX: Animated.AnimatedInterpolation<number> }) {
+  const { colors, spacing, fontSize, fontWeight } = useTheme();
+  const scale = dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.8], extrapolate: 'clamp' });
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.deleteAction, { backgroundColor: colors.error, paddingHorizontal: spacing[5] }]}
+    >
+      <Animated.Text style={{ color: '#fff', fontSize: fontSize.sm, fontWeight: fontWeight.semibold, transform: [{ scale }] }}>
+        Delete
+      </Animated.Text>
+    </Pressable>
+  );
 }
 
 export default function WorkoutHistoryScreen() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const swipeableRefs = useRef<Map<string, Swipeable | null>>(new Map());
 
   const [allSessions, setAllSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [muscleFilter, setMuscleFilter] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!user) return;
@@ -121,23 +162,34 @@ export default function WorkoutHistoryScreen() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  const availableMuscles = Array.from(
+    new Set(allSessions.flatMap((s) => s.muscleGroups)),
+  ).sort();
+
   const filtered = allSessions.filter((s) => {
     const cutoff = getFilterCutoff(dateFilter);
-    return s.startedAt >= cutoff;
+    if (s.startedAt < cutoff) return false;
+    if (muscleFilter && !s.muscleGroups.includes(muscleFilter)) return false;
+    return true;
   });
 
-  const handleDelete = useCallback((id: string, date: string) => {
+  const confirmDelete = useCallback((item: SessionRow) => {
+    const ref = swipeableRefs.current.get(item.id);
     Alert.alert(
       'Delete Workout?',
-      `Delete the session from ${date}? This cannot be undone.`,
+      `Delete the session from ${formatDate(item.startedAt)}? This cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => ref?.close(),
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteSession(id);
-            setAllSessions((prev) => prev.filter((s) => s.id !== id));
+            await deleteSession(item.id);
+            setAllSessions((prev) => prev.filter((s) => s.id !== item.id));
           },
         },
       ],
@@ -162,7 +214,7 @@ export default function WorkoutHistoryScreen() {
       </View>
 
       {/* Date filter chips */}
-      <View style={[styles.filterRow, { paddingHorizontal: spacing[5], paddingVertical: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+      <View style={[styles.filterRow, { paddingHorizontal: spacing[5], paddingTop: spacing[3], paddingBottom: spacing[2] }]}>
         {DATE_FILTERS.map((f) => {
           const active = dateFilter === f.key;
           return (
@@ -187,6 +239,32 @@ export default function WorkoutHistoryScreen() {
         })}
       </View>
 
+      {/* Muscle group filter chips */}
+      {availableMuscles.length > 0 && (
+        <View style={[styles.filterRow, { paddingHorizontal: spacing[5], paddingBottom: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.border, flexWrap: 'wrap' }]}>
+          <Pressable
+            onPress={() => setMuscleFilter(null)}
+            style={[styles.chip, { backgroundColor: muscleFilter === null ? colors.text : colors.surface, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
+          >
+            <Text style={{ color: muscleFilter === null ? colors.background : colors.textMuted, fontSize: fontSize.xs }}>All muscles</Text>
+          </Pressable>
+          {availableMuscles.map((m) => {
+            const active = muscleFilter === m;
+            return (
+              <Pressable
+                key={m}
+                onPress={() => setMuscleFilter(active ? null : m)}
+                style={[styles.chip, { backgroundColor: active ? colors.text : colors.surface, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
+              >
+                <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.xs }}>
+                  {MUSCLE_GROUP_LABELS[m] ?? m}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.text} />
@@ -201,9 +279,15 @@ export default function WorkoutHistoryScreen() {
             paddingBottom: insets.bottom + 24,
           }}
           ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
-          renderItem={({ item }) => {
-            const dateStr = formatDate(item.startedAt);
-            return (
+          renderItem={({ item }) => (
+            <Swipeable
+              ref={(ref) => { swipeableRefs.current.set(item.id, ref); }}
+              friction={2}
+              rightThreshold={40}
+              renderRightActions={(_, dragX) => (
+                <DeleteAction onPress={() => confirmDelete(item)} dragX={dragX} />
+              )}
+            >
               <Pressable
                 onPress={() => router.push(`/workout/session/${item.id}`)}
                 style={({ pressed }) => [
@@ -219,29 +303,30 @@ export default function WorkoutHistoryScreen() {
                 <View style={styles.sessionRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
-                      {dateStr}
+                      {formatDate(item.startedAt)}
                     </Text>
                     <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: 2 }}>
                       {item.exerciseCount} exercise{item.exerciseCount !== 1 ? 's' : ''} · {item.setCount} set{item.setCount !== 1 ? 's' : ''}
                       {item.endedAt ? ` · ${formatDuration(item.startedAt, item.endedAt)}` : ''}
                     </Text>
+                    {item.muscleGroups.length > 0 && (
+                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 3 }}>
+                        {item.muscleGroups.slice(0, 4).map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ')}
+                        {item.muscleGroups.length > 4 ? ' …' : ''}
+                      </Text>
+                    )}
                   </View>
-                  <Pressable
-                    onPress={() => handleDelete(item.id, dateStr)}
-                    hitSlop={12}
-                    style={{ marginRight: spacing[3] }}
-                  >
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>🗑</Text>
-                  </Pressable>
                   <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>›</Text>
                 </View>
               </Pressable>
-            );
-          }}
+            </Swipeable>
+          )}
           ListEmptyComponent={
             <View style={[styles.center, { marginTop: spacing[16] }]}>
               <Text style={{ color: colors.textMuted, fontSize: fontSize.base, textAlign: 'center' }}>
-                {dateFilter === 'all' ? 'No workouts yet.\nStart your first session!' : 'No workouts in this period.'}
+                {dateFilter === 'all' && !muscleFilter
+                  ? 'No workouts yet.\nStart your first session!'
+                  : 'No workouts match these filters.'}
               </Text>
             </View>
           }
@@ -254,9 +339,10 @@ export default function WorkoutHistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
-  filterRow: { flexDirection: 'row', gap: 8 },
+  filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {},
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   sessionCard: {},
   sessionRow: { flexDirection: 'row', alignItems: 'center' },
+  deleteAction: { justifyContent: 'center', alignItems: 'center', marginBottom: 0 },
 });

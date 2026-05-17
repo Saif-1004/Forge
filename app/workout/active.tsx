@@ -14,6 +14,8 @@ import { router, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import { useWorkoutStore, type ActiveExercise, type ActiveSet } from '@/store/workoutStore';
+import { useSyncStore } from '@/store/syncStore';
+import { useAuthStore } from '@/store/authStore';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 
 function formatDuration(ms: number): string {
@@ -129,7 +131,14 @@ function SetRow({ set, seId, onUpdate, onLog, onDelete }: SetRowProps) {
             </Text>
           </Pressable>
         ) : (
-          <Text style={{ color: colors.success, fontSize: fontSize.lg }}>✓</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {set.isPR && (
+              <View style={{ backgroundColor: '#F59E0B', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>PR</Text>
+              </View>
+            )}
+            <Text style={{ color: colors.success, fontSize: fontSize.lg }}>✓</Text>
+          </View>
         )}
         <Pressable onPress={() => onDelete(seId, set.id)} hitSlop={8}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>×</Text>
@@ -228,6 +237,8 @@ export default function ActiveWorkoutScreen() {
   const { colors, fontSize, fontWeight, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { user } = useAuthStore();
+  const { sync } = useSyncStore();
   const {
     exercises,
     isPaused,
@@ -245,6 +256,29 @@ export default function ActiveWorkoutScreen() {
 
   const [elapsed, setElapsed] = useState(getElapsed);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // PR flash banner
+  const [prBanner, setPrBanner] = useState<{ name: string; reps: number; weight: number; unit: string } | null>(null);
+  const prTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevExercisesRef = useRef(exercises);
+  useEffect(() => {
+    const prev = prevExercisesRef.current;
+    outer: for (const ex of exercises) {
+      const prevEx = prev.find((e) => e.sessionExerciseId === ex.sessionExerciseId);
+      for (const s of ex.sets) {
+        if (s.isPR && s.loggedAt !== null) {
+          const prevSet = prevEx?.sets.find((ps) => ps.id === s.id);
+          if (!prevSet?.isPR) {
+            setPrBanner({ name: ex.exerciseName, reps: s.reps, weight: s.weight, unit: s.unit });
+            if (prTimerRef.current) clearTimeout(prTimerRef.current);
+            prTimerRef.current = setTimeout(() => setPrBanner(null), 3000);
+            break outer;
+          }
+        }
+      }
+    }
+    prevExercisesRef.current = exercises;
+  }, [exercises]);
 
   // Tick every second when running
   useEffect(() => {
@@ -300,6 +334,7 @@ export default function ActiveWorkoutScreen() {
                     text: 'End',
                     onPress: async () => {
                       await finishSession();
+                      if (user) sync(user.id).catch(() => {});
                       router.replace('/(tabs)/workout');
                     },
                   },
@@ -311,25 +346,30 @@ export default function ActiveWorkoutScreen() {
       );
     });
     return unsub;
-  }, [navigation, isPaused, pauseSession, exercises, finishSession]);
+  }, [navigation, isPaused, pauseSession, exercises, finishSession, user, sync]);
 
   const handleFinish = useCallback(() => {
     const totalLogged = exercises.reduce((acc, ex) => acc + ex.sets.filter((s) => s.loggedAt !== null).length, 0);
-    Alert.alert(
-      'Finish Workout?',
-      totalLogged === 0 ? 'No sets logged yet.' : `${totalLogged} set${totalLogged !== 1 ? 's' : ''} logged.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Finish',
-          onPress: async () => {
-            await finishSession();
-            router.replace('/(tabs)/workout');
-          },
-        },
-      ],
+    const newPRs = exercises.flatMap((ex) =>
+      ex.sets
+        .filter((s) => s.isPR && s.loggedAt !== null)
+        .map((s) => `${ex.exerciseName} — ${s.reps} rep${s.reps !== 1 ? 's' : ''} @ ${s.weight}${s.unit}`),
     );
-  }, [exercises, finishSession]);
+    const prLine = newPRs.length > 0 ? `\n\n🏆 ${newPRs.length} new PR${newPRs.length !== 1 ? 's' : ''}:\n${newPRs.join('\n')}` : '';
+    const body = totalLogged === 0 ? 'No sets logged yet.' : `${totalLogged} set${totalLogged !== 1 ? 's' : ''} logged.${prLine}`;
+
+    Alert.alert('Finish Workout?', body, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Finish',
+        onPress: async () => {
+          await finishSession();
+          if (user) sync(user.id).catch(() => {});
+          router.replace('/(tabs)/workout');
+        },
+      },
+    ]);
+  }, [exercises, finishSession, user, sync]);
 
   const handleDiscard = useCallback(() => {
     Alert.alert('Discard Workout?', 'This will delete all sets logged in this session.', [
@@ -400,6 +440,16 @@ export default function ActiveWorkoutScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* PR flash banner */}
+      {prBanner && (
+        <View style={{ backgroundColor: '#F59E0B', paddingVertical: 10, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>🏆 NEW PR!</Text>
+          <Text style={{ color: '#fff', fontSize: 13, flex: 1 }} numberOfLines={1}>
+            {prBanner.name} · {prBanner.reps} rep{prBanner.reps !== 1 ? 's' : ''} @ {prBanner.weight}{prBanner.unit}
+          </Text>
+        </View>
+      )}
 
       {/* Exercise list */}
       <ScrollView

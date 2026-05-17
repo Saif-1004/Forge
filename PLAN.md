@@ -154,6 +154,16 @@ Every value set during onboarding can be updated at any time from Settings. Chan
 - [ ] Create and manage custom exercises
 - [ ] Filter by muscle group, equipment type
 
+#### Exercise Demonstration Media
+- [ ] Each built-in exercise has a demonstration image showing proper form (starting position + key cue)
+- [ ] Images stored in Supabase Storage, referenced by exercise ID — lazy-loaded, not bundled in app
+- [ ] In-session: tap exercise name → modal shows demonstration image + key form cues (2–3 bullet points)
+- [ ] Exercise picker: optional small thumbnail visible on exercise row (toggle in Settings)
+- [ ] Image generation strategy: use AI image generation (Stable Diffusion / FLUX) to create clean, consistent anatomical-style or studio-style form illustrations for all 200+ exercises — single consistent visual style across the library
+- [ ] Fallback: muscle group diagram (front/back body outline) shown if no image available for that exercise
+- [ ] Custom exercises: user can optionally upload a photo/video from camera roll as their demo media
+- [ ] Images are app-version-gated: served via CDN with cache headers, no re-download unless exercise content version bumps
+
 #### Workout Templates
 - [ ] Save any completed session as a template
 - [ ] Build templates from scratch (drag-to-reorder exercises)
@@ -177,11 +187,35 @@ Every value set during onboarding can be updated at any time from Settings. Chan
 - [ ] Configurable per exercise (default 60 / 90 / 120 / 180 s)
 - [ ] Haptic + silent notification when rest ends
 - [ ] Skip / add time controls
+- [ ] Toggle to disable rest timer per session
+- [ ] Toggle to hide workout duration clock (some users find it distracting)
 
 #### Reminders
 - [ ] Scheduled push notifications (e.g. "Time to lift — you haven't trained in 3 days")
 - [ ] Custom reminder schedule (days of week + time)
 - [ ] "You last trained X days ago" in-app nudge
+
+#### Gym Proximity Notifications *(location-aware)*
+- [ ] Request location permission on first setup (or from Settings)
+- [ ] On permission grant, show user their 5 nearest gyms using device location + Google Places / Foursquare API
+- [ ] User selects one as "My Gym" — stored in profile (name, lat/lng, place ID)
+- [ ] Option to change gym at any time in Settings
+- [ ] Background geofence: when user enters a ~200m radius of their gym, fire a push notification: *"Looks like you're at [Gym Name] — want to start logging?"*
+- [ ] Notification is deep-linked directly to "Start Workout" flow
+- [ ] Geofence only active if user hasn't already started a session that day (no double-prompts)
+- [ ] Opt-out toggle in Settings — some users may not want location used
+- [ ] Privacy: GPS coordinates never sent to server — geofence computed on-device only (Expo Location background task)
+- [ ] Helps maintain streak: passive reminder without requiring the user to open the app first
+
+#### Workout Planner
+- [ ] Plan workouts ahead of time from the calendar view (tap any future day → "Plan Workout")
+- [ ] Attach a template to a planned day, or build a custom plan inline
+- [ ] Planned workouts appear on the calendar with a distinct marker (unfilled dot = planned, filled = completed)
+- [ ] On a planned workout day, home screen shows: *"You planned [Workout Name] today — ready to start?"* card
+- [ ] If planned day passes without logging, marked as "missed" (not a rest day) — streak logic differentiates
+- [ ] Edit or cancel planned workouts at any time
+- [ ] Repeating plans: set a workout to repeat weekly on specific days (e.g. "Push Day every Monday + Thursday")
+- [ ] Links naturally into the template system — templates are the content, the planner is the calendar layer
 
 #### Share Achievements
 - [ ] Native share sheet (iOS/Android) — export a styled card to any app (Instagram, WhatsApp, iMessage, X, etc.)

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { database } from '@/lib/watermelon/database';
+import { checkAndUpdatePR } from '@/lib/pr/checkPR';
 import type { WorkoutSession, SessionExercise, Set as SetModel } from '@/lib/watermelon/models';
 
 export interface ActiveSet {
@@ -11,6 +12,7 @@ export interface ActiveSet {
   rpe: number | null;
   isWarmup: boolean;
   loggedAt: number | null;  // null = not yet logged
+  isPR?: boolean;
 }
 
 export interface ActiveExercise {
@@ -24,6 +26,7 @@ export interface ActiveExercise {
 
 interface WorkoutStore {
   sessionId: string | null;
+  userId: string | null;
   sessionName: string | null;
   startedAt: number | null;
   exercises: ActiveExercise[];
@@ -31,11 +34,12 @@ interface WorkoutStore {
   isPaused: boolean;
   pausedAt: number | null;
   accumulatedPauseMs: number;
+  defaultUnit: 'kg' | 'lbs';
 
   getElapsed: () => number;
   pauseSession: () => void;
   resumeSession: () => void;
-  startSession: (userId: string) => Promise<void>;
+  startSession: (userId: string, unit: 'kg' | 'lbs') => Promise<void>;
   finishSession: () => Promise<void>;
   discardSession: () => Promise<void>;
   addExercise: (ex: { id: string; name: string; musclePrimary: string[] }) => Promise<void>;
@@ -47,10 +51,9 @@ interface WorkoutStore {
   reset: () => void;
 }
 
-const DEFAULT_UNIT: 'kg' | 'lbs' = 'kg';
-
 export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   sessionId: null,
+  userId: null,
   sessionName: null,
   startedAt: null,
   exercises: [],
@@ -58,6 +61,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   isPaused: false,
   pausedAt: null,
   accumulatedPauseMs: 0,
+  defaultUnit: 'kg',
 
   getElapsed: () => {
     const { startedAt, isPaused, pausedAt, accumulatedPauseMs } = get();
@@ -82,7 +86,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     });
   },
 
-  startSession: async (userId) => {
+  startSession: async (userId, unit) => {
     const now = Date.now();
     const sessionsCollection = database.collections.get<WorkoutSession>('workout_sessions');
     let newSessionId = '';
@@ -101,7 +105,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       newSessionId = session.id;
     });
 
-    set({ sessionId: newSessionId, startedAt: now, exercises: [], isActive: true, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0 });
+    set({ sessionId: newSessionId, userId, startedAt: now, exercises: [], isActive: true, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0, defaultUnit: unit });
   },
 
   finishSession: async () => {
@@ -116,7 +120,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       });
     });
 
-    set({ sessionId: null, startedAt: null, exercises: [], isActive: false, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0 });
+    set({ sessionId: null, userId: null, startedAt: null, exercises: [], isActive: false, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0 });
   },
 
   discardSession: async () => {
@@ -152,7 +156,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       } catch {}
     });
 
-    set({ sessionId: null, startedAt: null, exercises: [], isActive: false, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0 });
+    set({ sessionId: null, userId: null, startedAt: null, exercises: [], isActive: false, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0 });
   },
 
   addExercise: async (ex) => {
@@ -212,7 +216,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   },
 
   addSet: (sessionExerciseId) => {
-    const { exercises } = get();
+    const { exercises, defaultUnit } = get();
     set({
       exercises: exercises.map((ex) => {
         if (ex.sessionExerciseId !== sessionExerciseId) return ex;
@@ -222,7 +226,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           setNumber: ex.sets.length + 1,
           reps: prev?.reps ?? 10,
           weight: prev?.weight ?? 0,
-          unit: prev?.unit ?? DEFAULT_UNIT,
+          unit: prev?.unit ?? defaultUnit,
           rpe: null,
           isWarmup: false,
           loggedAt: null,
@@ -246,7 +250,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   },
 
   logSet: async (sessionExerciseId, setId) => {
-    const { exercises } = get();
+    const { exercises, userId } = get();
     const ex = exercises.find((e) => e.sessionExerciseId === sessionExerciseId);
     const targetSet = ex?.sets.find((s) => s.id === setId);
     if (!targetSet || targetSet.loggedAt !== null) return;
@@ -272,14 +276,26 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       newDbId = setRecord.id;
     });
 
-    // Replace the local id with the WatermelonDB id
+    // Check for PR (skip warmup sets)
+    let isPR = false;
+    if (userId && ex && !targetSet.isWarmup) {
+      isPR = await checkAndUpdatePR(
+        userId,
+        ex.exerciseId,
+        null,
+        targetSet.reps,
+        targetSet.weight,
+        targetSet.unit,
+      );
+    }
+
     set({
-      exercises: exercises.map((ex) => {
-        if (ex.sessionExerciseId !== sessionExerciseId) return ex;
+      exercises: exercises.map((e) => {
+        if (e.sessionExerciseId !== sessionExerciseId) return e;
         return {
-          ...ex,
-          sets: ex.sets.map((s) =>
-            s.id === setId ? { ...s, id: newDbId, loggedAt: now } : s,
+          ...e,
+          sets: e.sets.map((s) =>
+            s.id === setId ? { ...s, id: newDbId, loggedAt: now, isPR } : s,
           ),
         };
       }),
@@ -315,6 +331,6 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   },
 
   reset: () => {
-    set({ sessionId: null, startedAt: null, exercises: [], isActive: false, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0 });
+    set({ sessionId: null, userId: null, startedAt: null, exercises: [], isActive: false, sessionName: null, isPaused: false, pausedAt: null, accumulatedPauseMs: 0, defaultUnit: 'kg' });
   },
 }));

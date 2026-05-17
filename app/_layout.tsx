@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -7,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/store/authStore';
+import { useSyncStore } from '@/store/syncStore';
 import { database } from '@/lib/watermelon/database';
 import { seedExercisesIfNeeded } from '@/lib/watermelon/seed';
 
@@ -18,6 +20,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const { setSession } = useAuthStore();
+  const appState = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     seedExercisesIfNeeded().catch(() => {});
@@ -38,7 +41,21 @@ export default function RootLayout() {
       },
     );
 
-    return () => subscription.unsubscribe();
+    // Trigger sync when app returns to foreground
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        const { user } = useAuthStore.getState();
+        if (user) {
+          useSyncStore.getState().sync(user.id).catch(() => {});
+        }
+      }
+      appState.current = nextState;
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      appStateSub.remove();
+    };
   }, [setSession]);
 
   return (
