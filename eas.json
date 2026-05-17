@@ -30,9 +30,6 @@
     },
     "production": {
       "autoIncrement": true,
-      "ios": {
-        "enterpriseProvisioning": "universal"
-      },
       "env": {
         "APP_VARIANT": "production"
       }

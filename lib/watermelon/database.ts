@@ -11,6 +11,9 @@ import {
   FoodLog,
   WaterLog,
   Food,
+  WorkoutTemplate,
+  TemplateExercise,
+  BodyWeightLog,
 } from './models';
 
 const adapter = new SQLiteAdapter({
@@ -34,6 +37,9 @@ export const database = new Database({
     FoodLog,
     WaterLog,
     Food,
+    WorkoutTemplate,
+    TemplateExercise,
+    BodyWeightLog,
   ],
 });
 

@@ -177,7 +177,7 @@ export const EXERCISES: ExerciseSeed[] = [
   { name: 'Rope Overhead Tricep Extension', muscle_primary: ['triceps'], muscle_secondary: [], equipment: 'cable' },
   { name: 'Tricep Kickback', muscle_primary: ['triceps'], muscle_secondary: [], equipment: 'dumbbell' },
   { name: 'Bench Dip', muscle_primary: ['triceps'], muscle_secondary: ['front_delt'], equipment: null },
-  { name: 'Machine Tricep Extension', machine_secondary: [], muscle_primary: ['triceps'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Machine Tricep Extension', muscle_primary: ['triceps'], muscle_secondary: [], equipment: 'machine' },
   { name: 'Tate Press', muscle_primary: ['triceps'], muscle_secondary: [], equipment: 'dumbbell' },
   { name: 'California Press', muscle_primary: ['triceps'], muscle_secondary: [], equipment: 'barbell' },
   { name: 'Ring Dip', muscle_primary: ['chest', 'triceps'], muscle_secondary: ['front_delt'], equipment: null },
@@ -312,20 +312,29 @@ export const EXERCISES: ExerciseSeed[] = [
   { name: 'Burpee', muscle_primary: ['chest', 'quads'], muscle_secondary: ['core', 'front_delt'], equipment: null },
   { name: 'Landmine Hip Hinge', muscle_primary: ['glutes', 'hamstrings'], muscle_secondary: ['lower_back'], equipment: 'barbell' },
 
-  // ── CARDIO / CONDITIONING ────────────────────────────────────────────────
-  { name: 'Treadmill', muscle_primary: ['quads', 'calves'], muscle_secondary: ['hamstrings', 'glutes'], equipment: 'machine' },
-  { name: 'Rowing Machine', muscle_primary: ['lats', 'mid_back'], muscle_secondary: ['hamstrings', 'glutes', 'biceps'], equipment: 'machine' },
-  { name: 'Stationary Bike', muscle_primary: ['quads', 'hamstrings'], muscle_secondary: ['glutes', 'calves'], equipment: 'machine' },
-  { name: 'Stair Climber', muscle_primary: ['glutes', 'quads'], muscle_secondary: ['calves', 'hamstrings'], equipment: 'machine' },
-  { name: 'Ski Erg', muscle_primary: ['lats', 'core'], muscle_secondary: ['traps', 'triceps'], equipment: 'machine' },
-  { name: 'Assault Bike', muscle_primary: ['quads', 'front_delt'], muscle_secondary: ['core', 'hamstrings'], equipment: 'machine' },
-  { name: 'Elliptical', muscle_primary: ['quads', 'glutes'], muscle_secondary: ['hamstrings', 'calves'], equipment: 'machine' },
-  { name: 'Jump Rope', muscle_primary: ['calves'], muscle_secondary: ['core', 'front_delt'], equipment: null },
+  // ── CARDIO ───────────────────────────────────────────────────────────────
+  { name: 'Treadmill Run', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Treadmill Walk', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Incline Treadmill Walk', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Stationary Bike', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Stationary Bike (High Intensity)', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Elliptical', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Stair Climber', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Rowing Machine', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Ski Erg', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Assault Bike', muscle_primary: ['cardio'], muscle_secondary: [], equipment: 'machine' },
+  { name: 'Jump Rope', muscle_primary: ['cardio'], muscle_secondary: [], equipment: null },
+  { name: 'Sprint', muscle_primary: ['cardio'], muscle_secondary: [], equipment: null },
+  { name: 'Outdoor Run', muscle_primary: ['cardio'], muscle_secondary: [], equipment: null },
+  { name: 'Outdoor Cycling', muscle_primary: ['cardio'], muscle_secondary: [], equipment: null },
+  { name: 'Swimming', muscle_primary: ['cardio'], muscle_secondary: [], equipment: null },
+  { name: 'HIIT', muscle_primary: ['cardio'], muscle_secondary: [], equipment: null },
+
+  // ── CONDITIONING / POWER ─────────────────────────────────────────────────
   { name: 'Box Jump', muscle_primary: ['quads', 'glutes'], muscle_secondary: ['calves', 'hamstrings'], equipment: null },
   { name: 'Battle Ropes', muscle_primary: ['front_delt', 'core'], muscle_secondary: ['traps', 'biceps'], equipment: null },
   { name: 'Sled Push', muscle_primary: ['quads', 'glutes'], muscle_secondary: ['calves', 'core'], equipment: null },
   { name: 'Sled Drag', muscle_primary: ['hamstrings', 'glutes'], muscle_secondary: ['lower_back', 'calves'], equipment: null },
-  { name: 'Sprint', muscle_primary: ['quads', 'hamstrings'], muscle_secondary: ['glutes', 'calves'], equipment: null },
 
   // ── FOREARMS ─────────────────────────────────────────────────────────────
   { name: 'Wrist Curl', muscle_primary: ['forearms'], muscle_secondary: [], equipment: 'barbell' },
@@ -347,7 +356,7 @@ export const MUSCLE_GROUPS = [
   'biceps', 'brachialis', 'triceps', 'forearms',
   'quads', 'hamstrings', 'glutes', 'calves',
   'core', 'obliques', 'hip_flexors',
-  'neck',
+  'neck', 'cardio',
 ] as const;
 
 export type MuscleGroup = typeof MUSCLE_GROUPS[number];
@@ -373,6 +382,7 @@ export const MUSCLE_GROUP_LABELS: Record<string, string> = {
   obliques: 'Obliques',
   hip_flexors: 'Hip Flexors',
   neck: 'Neck',
+  cardio: 'Cardio',
 };
 
 export const EQUIPMENT_LABELS: Record<string, string> = {

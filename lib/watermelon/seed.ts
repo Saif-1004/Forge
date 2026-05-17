@@ -12,11 +12,9 @@ export async function seedExercisesIfNeeded(): Promise<void> {
     return;
   }
 
-  // If local count is significantly below the bundled set, fill in missing exercises.
-  // This handles users who seeded from Supabase when it had fewer exercises.
-  if (count < EXERCISES.length - 10) {
-    await fillMissingExercises(collection);
-  }
+  // Always fill in any exercises that exist in the bundled data but not locally.
+  // fillMissingExercises is a no-op when nothing is missing, so this is safe every launch.
+  await fillMissingExercises(collection);
 }
 
 async function initialSeed(collection: any): Promise<void> {

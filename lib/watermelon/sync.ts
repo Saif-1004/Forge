@@ -1,7 +1,7 @@
 import { Q } from '@nozbe/watermelondb';
 import { database } from './database';
 import { supabase } from '@/lib/supabase/client';
-import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise, PersonalRecord } from './models';
+import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise, PersonalRecord, FoodLog, WaterLog } from './models';
 
 function msToIso(ms: number): string {
   return new Date(ms).toISOString();
@@ -100,12 +100,13 @@ export async function syncWorkoutSessions(userId: string): Promise<void> {
             unit: s.unit,
             rpe: s.rpe ?? null,
             is_warmup: s.isWarmup,
+            duration_seconds: s.durationSeconds ?? null,
             completed_at: msToIso(s.completedAt),
           };
 
           const { data: setRow, error: setErr } = await supabase
             .from('sets')
-            .upsert(setPayload, { onConflict: 'id' })
+            .upsert(setPayload as any, { onConflict: 'id' })
             .select('id')
             .single();
 
@@ -191,6 +192,98 @@ async function syncPersonalRecords(userId: string): Promise<void> {
         await pr.update((r) => {
           r.remoteId = row.id;
           r.exerciseRemoteId = exerciseRemoteId!;
+          r.syncedAt = Date.now();
+        });
+      });
+    } catch {}
+  }
+}
+
+// ── Nutrition sync ────────────────────────────────────────────────────────────
+// Requires Supabase tables:
+//   food_logs(id, user_id, food_name, meal_type, serving_g, calories_kcal, protein_g, carbs_g, fat_g, logged_at, date)
+//   water_logs(id, user_id, amount_ml, logged_at, date)
+
+export async function syncNutrition(userId: string): Promise<void> {
+  await Promise.all([syncFoodLogs(userId), syncWaterLogs(userId)]);
+}
+
+async function syncFoodLogs(userId: string): Promise<void> {
+  const col = database.collections.get<FoodLog>('food_logs');
+  const unsynced = await col
+    .query(
+      Q.where('user_id', userId),
+      Q.where('is_deleted', false),
+      Q.where('synced_at', Q.eq(null)),
+    )
+    .fetch();
+
+  for (const log of unsynced) {
+    try {
+      const payload = {
+        ...(log.remoteId ? { id: log.remoteId } : {}),
+        user_id: userId,
+        food_name: log.foodName,
+        meal_type: log.mealType,
+        serving_g: log.servingG,
+        calories_kcal: log.caloriesKcal,
+        protein_g: log.proteinG,
+        carbs_g: log.carbsG,
+        fat_g: log.fatG,
+        logged_at: msToIso(log.loggedAt),
+        date: log.date,
+      };
+
+      const { data: row, error } = await supabase
+        .from('food_logs')
+        .upsert(payload as any, { onConflict: 'id' })
+        .select('id')
+        .single();
+
+      if (error || !row) continue;
+      const remoteId = (row as any).id as string;
+
+      await database.write(async () => {
+        await log.update((r) => {
+          r.remoteId = remoteId;
+          r.syncedAt = Date.now();
+        });
+      });
+    } catch {}
+  }
+}
+
+async function syncWaterLogs(userId: string): Promise<void> {
+  const col = database.collections.get<WaterLog>('water_logs');
+  const unsynced = await col
+    .query(
+      Q.where('user_id', userId),
+      Q.where('is_deleted', false),
+      Q.where('synced_at', Q.eq(null)),
+    )
+    .fetch();
+
+  for (const log of unsynced) {
+    try {
+      const payload = {
+        ...(log.remoteId ? { id: log.remoteId } : {}),
+        user_id: userId,
+        amount_ml: log.amountMl,
+        logged_at: msToIso(log.loggedAt),
+        date: log.date,
+      };
+
+      const { data: row, error } = await (supabase as any)
+        .from('water_logs')
+        .upsert(payload, { onConflict: 'id' })
+        .select('id')
+        .single();
+
+      if (error || !row) continue;
+
+      await database.write(async () => {
+        await log.update((r) => {
+          r.remoteId = row.id;
           r.syncedAt = Date.now();
         });
       });

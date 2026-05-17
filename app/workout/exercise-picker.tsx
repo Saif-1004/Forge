@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,7 @@ const FILTER_GROUPS = [
   'glutes',
   'core',
   'calves',
+  'cardio',
 ];
 
 export default function ExercisePickerScreen() {
@@ -49,6 +50,9 @@ export default function ExercisePickerScreen() {
   const [filter, setFilter] = useState(ALL);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<string | null>(null);
+
+  const filterScrollRef = useRef<ScrollView>(null);
+  const chipOffsetsRef = useRef<Map<string, number>>(new Map());
 
   // For active session: block re-adding already-added exercises
   const activeIds = new Set(activeExercises.map((e) => e.exerciseId));
@@ -120,9 +124,15 @@ export default function ExercisePickerScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.md }}>←</Text>
         </Pressable>
-        <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold, marginLeft: spacing[3] }}>
+        <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold, marginLeft: spacing[3], flex: 1 }}>
           Add Exercise
         </Text>
+        <Pressable
+          onPress={() => router.push({ pathname: '/workout/create-exercise', params: editSessionId ? { editSessionId } : {} })}
+          style={[{ backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }]}
+        >
+          <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>+ Create</Text>
+        </Pressable>
       </View>
 
       {/* Search */}
@@ -150,17 +160,25 @@ export default function ExercisePickerScreen() {
 
       {/* Muscle group filters */}
       <ScrollView
+        ref={filterScrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2] }}
-        style={{ flexShrink: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
+        contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2], alignItems: 'center' }}
+        style={{ flexShrink: 0, flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
       >
         {FILTER_GROUPS.map((item) => {
           const active = filter === item;
           return (
             <Pressable
               key={item}
-              onPress={() => setFilter(item)}
+              onPress={() => {
+                setFilter(item);
+                const x = chipOffsetsRef.current.get(item) ?? 0;
+                filterScrollRef.current?.scrollTo({ x: Math.max(0, x - spacing[5]), animated: true });
+              }}
+              onLayout={(e) => {
+                chipOffsetsRef.current.set(item, e.nativeEvent.layout.x);
+              }}
               style={[
                 styles.filterChip,
                 {

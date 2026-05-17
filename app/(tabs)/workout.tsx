@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Q } from '@nozbe/watermelondb';
@@ -8,7 +8,14 @@ import { useAuthStore } from '@/store/authStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useSyncStore } from '@/store/syncStore';
 import { database } from '@/lib/watermelon/database';
-import type { WorkoutSession, SessionExercise } from '@/lib/watermelon/models';
+import type { WorkoutSession, SessionExercise, WorkoutTemplate, TemplateExercise, Exercise } from '@/lib/watermelon/models';
+
+interface TemplateCard {
+  id: string;
+  name: string;
+  exerciseCount: number;
+  exercises: { exerciseId: string; exerciseName: string; defaultSets: number; defaultReps: number; defaultWeight: number; defaultUnit: string; orderIndex: number }[];
+}
 
 type DateFilter = 'week' | 'month' | 'all';
 
@@ -68,6 +75,8 @@ export default function WorkoutTab() {
   const [starting, setStarting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [dateFilter, setDateFilter] = useState<DateFilter>('week');
+  const [templates, setTemplates] = useState<TemplateCard[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
 
   // Elapsed timer for active session banner
   useEffect(() => {
@@ -125,6 +134,101 @@ export default function WorkoutTab() {
   const filteredSessions = allSessions.filter(
     (s) => s.startedAt >= getFilterCutoff(dateFilter),
   );
+
+  // Load templates
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      setLoadingTemplates(true);
+      try {
+        const tCol = database.collections.get<WorkoutTemplate>('workout_templates');
+        const teCol = database.collections.get<TemplateExercise>('template_exercises');
+        const exCol = database.collections.get<Exercise>('exercises');
+
+        const rawTemplates = await tCol
+          .query(Q.where('user_id', user.id), Q.where('is_deleted', false), Q.sortBy('created_at', Q.desc))
+          .fetch();
+
+        const cards = await Promise.all(rawTemplates.map(async (t) => {
+          const tes = await teCol
+            .query(Q.where('template_id', t.id), Q.where('is_deleted', false), Q.sortBy('order_index', Q.asc))
+            .fetch();
+          const exercises = await Promise.all(tes.map(async (te) => {
+            let exerciseName = 'Unknown';
+            try { const ex = await exCol.find(te.exerciseId); exerciseName = ex.name; } catch {}
+            return { exerciseId: te.exerciseId, exerciseName, defaultSets: te.defaultSets, defaultReps: te.defaultReps, defaultWeight: te.defaultWeight, defaultUnit: te.defaultUnit, orderIndex: te.orderIndex };
+          }));
+          return { id: t.id, name: t.name, exerciseCount: exercises.length, exercises };
+        }));
+
+        setTemplates(cards);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+    load();
+  }, [user]);
+
+  const handleStartFromTemplate = useCallback(async (template: TemplateCard) => {
+    if (!user) return;
+    setStarting(true);
+    try {
+      // Start session via store (creates DB record + sets store state)
+      await startSession(user.id, unitPreference);
+
+      // Add each exercise via the store (handles both DB + store state)
+      for (const ex of template.exercises) {
+        await useWorkoutStore.getState().addExercise({
+          id: ex.exerciseId,
+          name: ex.exerciseName,
+          musclePrimary: [],
+        });
+        // Pre-fill sets using addSet for each set
+        const { exercises: currentExercises } = useWorkoutStore.getState();
+        const addedEx = currentExercises.find((e) => e.exerciseId === ex.exerciseId);
+        if (addedEx) {
+          for (let i = 0; i < ex.defaultSets; i++) {
+            useWorkoutStore.getState().addSet(addedEx.sessionExerciseId);
+            // Update the set with template defaults
+            const updatedEx = useWorkoutStore.getState().exercises.find((e) => e.sessionExerciseId === addedEx.sessionExerciseId);
+            const lastSet = updatedEx?.sets[updatedEx.sets.length - 1];
+            if (lastSet) {
+              useWorkoutStore.getState().updateSet(addedEx.sessionExerciseId, lastSet.id, {
+                reps: ex.defaultReps,
+                weight: ex.defaultWeight,
+                unit: ex.defaultUnit as 'kg' | 'lbs',
+              });
+            }
+          }
+        }
+      }
+
+      router.push('/workout/active');
+    } finally {
+      setStarting(false);
+    }
+  }, [user, unitPreference, startSession]);
+
+  const handleDeleteTemplate = useCallback((template: TemplateCard) => {
+    Alert.alert('Delete Template?', `Delete "${template.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const tCol = database.collections.get<WorkoutTemplate>('workout_templates');
+          const teCol = database.collections.get<TemplateExercise>('template_exercises');
+          await database.write(async () => {
+            const tes = await teCol.query(Q.where('template_id', template.id)).fetch();
+            for (const te of tes) await te.destroyPermanently();
+            const t = await tCol.find(template.id);
+            await t.destroyPermanently();
+          });
+          setTemplates((prev) => prev.filter((t) => t.id !== template.id));
+        },
+      },
+    ]);
+  }, []);
 
   const handleStart = useCallback(async () => {
     if (!user) return;
@@ -215,6 +319,58 @@ export default function WorkoutTab() {
             </Text>
           )}
         </Pressable>
+      )}
+
+      {/* Templates section */}
+      <View style={[styles.sectionHeader, { marginBottom: spacing[3] }]}>
+        <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold }}>Templates</Text>
+      </View>
+
+      {loadingTemplates ? (
+        <ActivityIndicator color={colors.textMuted} style={{ marginBottom: spacing[4] }} />
+      ) : templates.length === 0 ? (
+        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[5], alignItems: 'center' }}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center' }}>
+            No templates yet.{'\n'}Finish a workout and save it as a template.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing[5] }} contentContainerStyle={{ gap: spacing[3], paddingRight: spacing[1] }}>
+          {templates.map((t) => (
+            <Pressable
+              key={t.id}
+              onPress={() => handleStartFromTemplate(t)}
+              onLongPress={() => handleDeleteTemplate(t)}
+              style={({ pressed }) => [
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.lg,
+                  padding: spacing[4],
+                  width: 180,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold, marginBottom: 4 }} numberOfLines={1}>
+                {t.name}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[3] }}>
+                {t.exerciseCount} exercise{t.exerciseCount !== 1 ? 's' : ''}
+              </Text>
+              {t.exercises.slice(0, 3).map((ex) => (
+                <Text key={ex.exerciseId} style={{ color: colors.textMuted, fontSize: fontSize.xs }} numberOfLines={1}>
+                  · {ex.exerciseName}
+                </Text>
+              ))}
+              {t.exercises.length > 3 && (
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>+{t.exercises.length - 3} more</Text>
+              )}
+              <View style={{ marginTop: spacing[3], backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: spacing[1], alignItems: 'center' }}>
+                <Text style={{ color: colors.background, fontSize: fontSize.xs, fontWeight: fontWeight.semibold }}>Start</Text>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
       )}
 
       {/* Recent sessions header + filters */}

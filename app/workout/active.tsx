@@ -12,10 +12,12 @@ import {
 } from 'react-native';
 import { router, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
 import { useWorkoutStore, type ActiveExercise, type ActiveSet } from '@/store/workoutStore';
 import { useSyncStore } from '@/store/syncStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 
 function formatDuration(ms: number): string {
@@ -29,17 +31,29 @@ function formatDuration(ms: number): string {
 
 // ─── Set Row ────────────────────────────────────────────────────────────────
 
+function formatDurationDisplay(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
+}
+
 interface SetRowProps {
   set: ActiveSet;
   seId: string;
+  isCardio: boolean;
   onUpdate: (seId: string, setId: string, data: Partial<ActiveSet>) => void;
   onLog: (seId: string, setId: string) => void;
   onDelete: (seId: string, setId: string) => void;
 }
 
-function SetRow({ set, seId, onUpdate, onLog, onDelete }: SetRowProps) {
+function SetRow({ set, seId, isCardio, onUpdate, onLog, onDelete }: SetRowProps) {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const logged = set.loggedAt !== null;
+
+  const totalSec = set.durationSeconds ?? 0;
+  const durationMins = String(Math.floor(totalSec / 60));
+  const durationSecs = String(totalSec % 60);
 
   return (
     <View
@@ -61,74 +75,81 @@ function SetRow({ set, seId, onUpdate, onLog, onDelete }: SetRowProps) {
         {set.setNumber}
       </Text>
 
-      {/* Reps */}
-      <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
-        <TextInput
-          value={set.reps > 0 ? String(set.reps) : ''}
-          onChangeText={(v) => onUpdate(seId, set.id, { reps: parseInt(v) || 0 })}
-          keyboardType="number-pad"
-          editable={!logged}
-          style={[
-            styles.setInput,
-            {
-              color: logged ? colors.textMuted : colors.text,
-              backgroundColor: colors.surface,
-              fontSize: fontSize.base,
-              fontWeight: fontWeight.medium,
-              borderRadius: radius.sm,
-              textAlign: 'center',
-              paddingVertical: spacing[1],
-            },
-          ]}
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-        />
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>reps</Text>
-      </View>
-
-      {/* Weight */}
-      <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
-        <TextInput
-          value={set.weight > 0 ? String(set.weight) : ''}
-          onChangeText={(v) => onUpdate(seId, set.id, { weight: parseFloat(v) || 0 })}
-          keyboardType="decimal-pad"
-          editable={!logged}
-          style={[
-            styles.setInput,
-            {
-              color: logged ? colors.textMuted : colors.text,
-              backgroundColor: colors.surface,
-              fontSize: fontSize.base,
-              fontWeight: fontWeight.medium,
-              borderRadius: radius.sm,
-              textAlign: 'center',
-              paddingVertical: spacing[1],
-            },
-          ]}
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-        />
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>{set.unit}</Text>
-      </View>
+      {isCardio ? (
+        /* Duration inputs: minutes + seconds */
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginLeft: spacing[3], gap: spacing[2] }}>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={durationMins}
+              onChangeText={(v) => {
+                const m = parseInt(v) || 0;
+                const s = totalSec % 60;
+                onUpdate(seId, set.id, { durationSeconds: m * 60 + s });
+              }}
+              keyboardType="number-pad"
+              editable={!logged}
+              style={[styles.setInput, { color: logged ? colors.textMuted : colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>min</Text>
+          </View>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={durationSecs}
+              onChangeText={(v) => {
+                const s = Math.min(parseInt(v) || 0, 59);
+                const m = Math.floor(totalSec / 60);
+                onUpdate(seId, set.id, { durationSeconds: m * 60 + s });
+              }}
+              keyboardType="number-pad"
+              editable={!logged}
+              style={[styles.setInput, { color: logged ? colors.textMuted : colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>sec</Text>
+          </View>
+        </View>
+      ) : (
+        <>
+          {/* Reps */}
+          <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
+            <TextInput
+              value={set.reps > 0 ? String(set.reps) : ''}
+              onChangeText={(v) => onUpdate(seId, set.id, { reps: parseInt(v) || 0 })}
+              keyboardType="number-pad"
+              editable={!logged}
+              style={[styles.setInput, { color: logged ? colors.textMuted : colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>reps</Text>
+          </View>
+          {/* Weight */}
+          <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
+            <TextInput
+              value={set.weight > 0 ? String(set.weight) : ''}
+              onChangeText={(v) => onUpdate(seId, set.id, { weight: parseFloat(v) || 0 })}
+              keyboardType="decimal-pad"
+              editable={!logged}
+              style={[styles.setInput, { color: logged ? colors.textMuted : colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>{set.unit}</Text>
+          </View>
+        </>
+      )}
 
       {/* Actions */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', gap: spacing[2] }}>
         {!logged ? (
           <Pressable
             onPress={() => onLog(seId, set.id)}
-            style={[
-              styles.logBtn,
-              {
-                backgroundColor: colors.text,
-                borderRadius: radius.md,
-                paddingHorizontal: spacing[3],
-                paddingVertical: spacing[1],
-              },
-            ]}
+            style={[styles.logBtn, { backgroundColor: colors.text, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
           >
-            <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>
-              Log
-            </Text>
+            <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Log</Text>
           </Pressable>
         ) : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -137,12 +158,75 @@ function SetRow({ set, seId, onUpdate, onLog, onDelete }: SetRowProps) {
                 <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>PR</Text>
               </View>
             )}
+            {isCardio && logged && set.durationSeconds != null && set.durationSeconds > 0 && (
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>{formatDurationDisplay(set.durationSeconds)}</Text>
+            )}
             <Text style={{ color: colors.success, fontSize: fontSize.lg }}>✓</Text>
           </View>
         )}
         <Pressable onPress={() => onDelete(seId, set.id)} hitSlop={8}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>×</Text>
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── Rest Timer Panel ────────────────────────────────────────────────────────
+
+function formatCountdown(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+interface RestTimerProps {
+  secondsLeft: number;
+  total: number;
+  onSkip: () => void;
+  onAdd: (extra: number) => void;
+}
+
+function RestTimerPanel({ secondsLeft, total, onSkip, onAdd }: RestTimerProps) {
+  const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
+  const progress = total > 0 ? secondsLeft / total : 0;
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        paddingHorizontal: spacing[5],
+        paddingTop: spacing[3],
+        paddingBottom: spacing[2],
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[2] }}>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 0.6 }}>
+          REST
+        </Text>
+        <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, letterSpacing: -0.5 }}>
+          {formatCountdown(secondsLeft)}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+          <Pressable
+            onPress={() => onAdd(30)}
+            style={[styles.timerBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
+          >
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>+30s</Text>
+          </Pressable>
+          <Pressable
+            onPress={onSkip}
+            style={[styles.timerBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[1] }]}
+          >
+            <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Skip</Text>
+          </Pressable>
+        </View>
+      </View>
+      {/* Progress bar */}
+      <View style={{ height: 3, backgroundColor: colors.border, borderRadius: 2 }}>
+        <View style={{ height: 3, width: `${progress * 100}%`, backgroundColor: colors.text, borderRadius: 2 }} />
       </View>
     </View>
   );
@@ -161,6 +245,7 @@ interface ExerciseCardProps {
 
 function ExerciseCard({ exercise, onAddSet, onRemove, onUpdate, onLog, onDeleteSet }: ExerciseCardProps) {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
+  const isCardio = exercise.musclePrimary.includes('cardio');
 
   return (
     <View
@@ -195,8 +280,17 @@ function ExerciseCard({ exercise, onAddSet, onRemove, onUpdate, onLog, onDeleteS
       {exercise.sets.length > 0 && (
         <View style={[styles.setRow, { paddingHorizontal: spacing[3], marginBottom: spacing[1] }]}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 24, textAlign: 'center' }}>#</Text>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Reps</Text>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 64, textAlign: 'center', marginLeft: spacing[3] }}>Weight</Text>
+          {isCardio ? (
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Min</Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[2] }}>Sec</Text>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Reps</Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 64, textAlign: 'center', marginLeft: spacing[3] }}>Weight</Text>
+            </>
+          )}
         </View>
       )}
 
@@ -206,6 +300,7 @@ function ExerciseCard({ exercise, onAddSet, onRemove, onUpdate, onLog, onDeleteS
           key={s.id}
           set={s}
           seId={exercise.sessionExerciseId}
+          isCardio={isCardio}
           onUpdate={onUpdate}
           onLog={onLog}
           onDelete={onDeleteSet}
@@ -225,7 +320,7 @@ function ExerciseCard({ exercise, onAddSet, onRemove, onUpdate, onLog, onDeleteS
           },
         ]}
       >
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>+ Add Set</Text>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>{isCardio ? '+ Add Interval' : '+ Add Set'}</Text>
       </Pressable>
     </View>
   );
@@ -239,6 +334,7 @@ export default function ActiveWorkoutScreen() {
   const navigation = useNavigation();
   const { user } = useAuthStore();
   const { sync } = useSyncStore();
+  const { defaultRestSeconds } = useSettingsStore();
   const {
     exercises,
     isPaused,
@@ -256,6 +352,58 @@ export default function ActiveWorkoutScreen() {
 
   const [elapsed, setElapsed] = useState(getElapsed);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Rest timer
+  const [restLeft, setRestLeft] = useState<number | null>(null);
+  const [restTotal, setRestTotal] = useState(defaultRestSeconds);
+  const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startRestTimer = useCallback((seconds: number) => {
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    setRestTotal(seconds);
+    setRestLeft(seconds);
+    restIntervalRef.current = setInterval(() => {
+      setRestLeft((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(restIntervalRef.current!);
+          restIntervalRef.current = null;
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const skipRestTimer = useCallback(() => {
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    restIntervalRef.current = null;
+    setRestLeft(null);
+  }, []);
+
+  const addRestTime = useCallback((extra: number) => {
+    setRestLeft((prev) => {
+      if (prev === null) return null;
+      const next = prev + extra;
+      setRestTotal((t) => t + extra);
+      return next;
+    });
+  }, []);
+
+  // Clean up rest timer on unmount
+  useEffect(() => {
+    return () => { if (restIntervalRef.current) clearInterval(restIntervalRef.current); };
+  }, []);
+
+  const handleLogSet = useCallback(async (seId: string, setId: string) => {
+    const ex = exercises.find((e) => e.sessionExerciseId === seId);
+    const targetSet = ex?.sets.find((s) => s.id === setId);
+    await logSet(seId, setId);
+    // Start rest timer for non-warmup, non-cardio sets
+    if (targetSet && !targetSet.isWarmup && !ex?.musclePrimary.includes('cardio')) {
+      startRestTimer(defaultRestSeconds);
+    }
+  }, [exercises, logSet, startRestTimer, defaultRestSeconds]);
 
   // PR flash banner
   const [prBanner, setPrBanner] = useState<{ name: string; reps: number; weight: number; unit: string } | null>(null);
@@ -474,12 +622,22 @@ export default function ActiveWorkoutScreen() {
               onAddSet={addSet}
               onRemove={handleRemoveExercise}
               onUpdate={updateSet}
-              onLog={logSet}
+              onLog={handleLogSet}
               onDeleteSet={deleteSet}
             />
           ))
         )}
       </ScrollView>
+
+      {/* Rest Timer */}
+      {restLeft !== null && (
+        <RestTimerPanel
+          secondsLeft={restLeft}
+          total={restTotal}
+          onSkip={skipRestTimer}
+          onAdd={addRestTime}
+        />
+      )}
 
       {/* Add Exercise FAB */}
       <View
@@ -518,4 +676,5 @@ const styles = StyleSheet.create({
   finishBtn: { borderRadius: 8 },
   fab: { position: 'absolute', borderRadius: 12 },
   empty: { alignItems: 'center' },
+  timerBtn: { borderWidth: 1 },
 });

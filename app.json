@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Pumps",
-    "slug": "pumps",
+    "name": "Forge",
+    "slug": "forge-workout",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "scheme": "pumps",
+    "scheme": "forge",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -15,11 +15,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.pumps.app",
+      "bundleIdentifier": "com.forgeapp.workout",
       "usesAppleSignIn": true
     },
     "android": {
-      "package": "com.pumps.app",
+      "package": "com.forgeapp.workout",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111111"
@@ -37,7 +37,14 @@
       "expo-apple-authentication",
       [
         "expo-camera",
-        { "cameraPermission": "Allow Pumps to access your camera to scan barcodes." }
+        { "cameraPermission": "Allow Forge to access your camera to scan barcodes and take food photos." }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Forge to access your photos for AI food analysis.",
+          "cameraPermission": "Allow Forge to take photos for AI food analysis."
+        }
       ],
       [
         "expo-notifications",

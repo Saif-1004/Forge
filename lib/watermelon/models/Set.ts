@@ -16,6 +16,7 @@ export class Set extends Model {
   @field('unit') unit!: 'lbs' | 'kg';
   @field('rpe') rpe!: number | null;
   @field('is_warmup') isWarmup!: boolean;
+  @field('duration_seconds') durationSeconds!: number | null;
   @field('completed_at') completedAt!: number;
   @field('is_deleted') isDeleted!: boolean;
   @field('synced_at') syncedAt!: number | null;

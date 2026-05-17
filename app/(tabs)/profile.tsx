@@ -8,21 +8,77 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
+  Switch,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { scheduleWorkoutReminder, cancelWorkoutReminder, requestNotificationPermissions } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase/client';
+
+const REST_PRESETS = [
+  { label: '30s', seconds: 30 },
+  { label: '1m', seconds: 60 },
+  { label: '90s', seconds: 90 },
+  { label: '2m', seconds: 120 },
+  { label: '3m', seconds: 180 },
+  { label: '5m', seconds: 300 },
+];
 
 export default function ProfileTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, displayName, unitPreference, updateDisplayName, updateUnitPreference, signOut } = useAuthStore();
+  const { defaultRestSeconds, setRestSeconds, calorieGoal, proteinGoal, carbsGoal, fatGoal, setGoals, notificationsEnabled, notificationHour, notificationMinute, setNotificationTime } = useSettingsStore();
 
   const [nameInput, setNameInput] = useState(displayName ?? '');
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [togglingUnit, setTogglingUnit] = useState(false);
+
+  const [editingGoals, setEditingGoals] = useState(false);
+  const [calInput, setCalInput] = useState(String(calorieGoal));
+  const [proteinInput, setProteinInput] = useState(String(proteinGoal));
+  const [carbsInput, setCarbsInput] = useState(String(carbsGoal));
+  const [fatInput, setFatInput] = useState(String(fatGoal));
+
+  const handleOpenGoals = () => {
+    setCalInput(String(calorieGoal));
+    setProteinInput(String(proteinGoal));
+    setCarbsInput(String(carbsGoal));
+    setFatInput(String(fatGoal));
+    setEditingGoals(true);
+  };
+
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const handleToggleNotifications = async (val: boolean) => {
+    if (val) {
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Permission needed', 'Enable notifications in Settings to use workout reminders.');
+        return;
+      }
+      await setNotificationTime(true, notificationHour, notificationMinute);
+      await scheduleWorkoutReminder(notificationHour, notificationMinute);
+    } else {
+      await setNotificationTime(false, notificationHour, notificationMinute);
+      await cancelWorkoutReminder();
+    }
+  };
+
+  const handleSaveGoals = async () => {
+    await setGoals({
+      calorieGoal: parseInt(calInput, 10) || calorieGoal,
+      proteinGoal: parseInt(proteinInput, 10) || proteinGoal,
+      carbsGoal: parseInt(carbsInput, 10) || carbsGoal,
+      fatGoal: parseInt(fatInput, 10) || fatGoal,
+    });
+    setEditingGoals(false);
+  };
 
   const handleSaveName = async () => {
     setSavingName(true);
@@ -67,7 +123,9 @@ export default function ProfileTab() {
           style: 'destructive',
           onPress: async () => {
             if (!user) return;
-            await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', user.id);
+            try {
+              await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', user.id);
+            } catch {}
             signOut();
           },
         },
@@ -166,6 +224,128 @@ export default function ProfileTab() {
         })}
         {togglingUnit && <ActivityIndicator size="small" color={colors.textMuted} />}
       </View>
+
+      {/* Rest timer default */}
+      <SectionLabel label="DEFAULT REST TIMER" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <View style={[styles.row, { flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[6] }]}>
+        {REST_PRESETS.map((p) => {
+          const active = defaultRestSeconds === p.seconds;
+          return (
+            <Pressable
+              key={p.seconds}
+              onPress={() => setRestSeconds(p.seconds)}
+              style={[
+                styles.unitBtn,
+                {
+                  backgroundColor: active ? colors.text : colors.surface,
+                  borderRadius: radius.md,
+                  paddingVertical: spacing[2],
+                  paddingHorizontal: spacing[4],
+                },
+              ]}
+            >
+              <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>
+                {p.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Workout reminders */}
+      <SectionLabel label="WORKOUT REMINDERS" colors={colors} fontSize={fontSize} spacing={spacing} />
+      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[2] }]}>
+        <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Daily Reminder</Text>
+        <Switch
+          value={notificationsEnabled}
+          onValueChange={handleToggleNotifications}
+          trackColor={{ false: colors.border, true: colors.text }}
+          thumbColor={colors.background}
+        />
+      </View>
+      {notificationsEnabled && (
+        <Pressable
+          onPress={() => setShowTimePicker(true)}
+          style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[6] }]}
+        >
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, flex: 1 }}>Reminder time</Text>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
+            {String(notificationHour).padStart(2, '0')}:{String(notificationMinute).padStart(2, '0')}
+          </Text>
+        </Pressable>
+      )}
+      {!notificationsEnabled && <View style={{ marginBottom: spacing[6] }} />}
+      {showTimePicker && (
+        <DateTimePicker
+          value={new Date(2000, 0, 1, notificationHour, notificationMinute)}
+          mode="time"
+          is24Hour
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={async (_, d) => {
+            setShowTimePicker(false);
+            if (!d) return;
+            const h = d.getHours();
+            const m = d.getMinutes();
+            await setNotificationTime(true, h, m);
+            await scheduleWorkoutReminder(h, m);
+          }}
+        />
+      )}
+
+      {/* Nutrition goals */}
+      <SectionLabel label="NUTRITION GOALS" colors={colors} fontSize={fontSize} spacing={spacing} />
+      {editingGoals ? (
+        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[6] }}>
+          <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[1] }}>Calories (kcal)</Text>
+              <TextInput
+                value={calInput}
+                onChangeText={setCalInput}
+                keyboardType="number-pad"
+                style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}
+              />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] }}>
+            {[
+              { label: 'Protein (g)', value: proteinInput, set: setProteinInput },
+              { label: 'Carbs (g)', value: carbsInput, set: setCarbsInput },
+              { label: 'Fat (g)', value: fatInput, set: setFatInput },
+            ].map(({ label, value, set }) => (
+              <View key={label} style={{ flex: 1 }}>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[1] }}>{label}</Text>
+                <TextInput
+                  value={value}
+                  onChangeText={set}
+                  keyboardType="number-pad"
+                  style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}
+                />
+              </View>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: spacing[4] }}>
+            <Pressable onPress={() => setEditingGoals(false)} hitSlop={8}>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={handleSaveGoals} hitSlop={8}>
+              <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[6] }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: fontSize.base }}>{calorieGoal} kcal</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
+              P {proteinGoal}g · C {carbsGoal}g · F {fatGoal}g
+            </Text>
+          </View>
+          <Pressable onPress={handleOpenGoals} hitSlop={8}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Edit</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Danger zone */}
       <DangerButton label="Sign out" onPress={handleSignOut} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} />

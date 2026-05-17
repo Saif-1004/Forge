@@ -6,11 +6,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
+import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { database } from '@/lib/watermelon/database';
 import { seedExercisesIfNeeded } from '@/lib/watermelon/seed';
+import { scheduleWorkoutReminder } from '@/lib/notifications';
+import { configureRevenueCat, signOutRevenueCat } from '@/lib/revenuecat';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,10 +24,17 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const { setSession } = useAuthStore();
+  const { load: loadSettings } = useSettingsStore();
   const appState = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     seedExercisesIfNeeded().catch(() => {});
+    loadSettings().then(() => {
+      const { notificationsEnabled, notificationHour, notificationMinute } = useSettingsStore.getState();
+      if (notificationsEnabled) {
+        scheduleWorkoutReminder(notificationHour, notificationMinute).catch(() => {});
+      }
+    }).catch(() => {});
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -33,9 +44,11 @@ export default function RootLayout() {
       async (event, session) => {
         await setSession(session);
         if (event === 'SIGNED_IN') {
-          const { onboardingCompleted } = useAuthStore.getState();
+          const { onboardingCompleted, user } = useAuthStore.getState();
+          if (user) configureRevenueCat(user.id).catch(() => {});
           router.replace(onboardingCompleted ? '/(tabs)' : '/onboarding/name');
         } else if (event === 'SIGNED_OUT') {
+          signOutRevenueCat().catch(() => {});
           router.replace('/(auth)');
         }
       },
@@ -52,9 +65,15 @@ export default function RootLayout() {
       appState.current = nextState;
     });
 
+    // Navigate to workout tab on notification tap
+    const notifSub = Notifications.addNotificationResponseReceivedListener(() => {
+      router.navigate('/(tabs)/workout');
+    });
+
     return () => {
       subscription.unsubscribe();
       appStateSub.remove();
+      notifSub.remove();
     };
   }, [setSession]);
 

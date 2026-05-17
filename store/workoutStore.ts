@@ -11,6 +11,7 @@ export interface ActiveSet {
   unit: 'kg' | 'lbs';
   rpe: number | null;
   isWarmup: boolean;
+  durationSeconds: number | null; // cardio only
   loggedAt: number | null;  // null = not yet logged
   isPR?: boolean;
 }
@@ -229,6 +230,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           unit: prev?.unit ?? defaultUnit,
           rpe: null,
           isWarmup: false,
+          durationSeconds: prev?.durationSeconds ?? null,
           loggedAt: null,
         };
         return { ...ex, sets: [...ex.sets, newSet] };
@@ -268,6 +270,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         record.unit = targetSet.unit;
         record.rpe = targetSet.rpe;
         record.isWarmup = targetSet.isWarmup;
+        record.durationSeconds = targetSet.durationSeconds ?? null;
         record.completedAt = now;
         record.isDeleted = false;
         record.remoteId = null;
@@ -278,7 +281,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
 
     // Check for PR (skip warmup sets)
     let isPR = false;
-    if (userId && ex && !targetSet.isWarmup) {
+    if (userId && ex && !targetSet.isWarmup && !ex.musclePrimary.includes('cardio')) {
       isPR = await checkAndUpdatePR(
         userId,
         ex.exerciseId,

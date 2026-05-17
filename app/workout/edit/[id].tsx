@@ -29,8 +29,10 @@ interface EditableSet {
   weight: number;
   unit: 'lbs' | 'kg';
   isWarmup: boolean;
+  durationSeconds: number | null;
   isNew: boolean;       // true = not yet persisted to DB
 }
+
 
 interface EditableExercise {
   seId: string;
@@ -44,15 +46,17 @@ interface EditableExercise {
 // ─── Set Row ─────────────────────────────────────────────────────────────────
 
 function SetRow({
-  set, seId,
+  set, seId, isCardio,
   onUpdate, onDelete,
 }: {
   set: EditableSet;
   seId: string;
+  isCardio: boolean;
   onUpdate: (seId: string, setId: string, data: Partial<EditableSet>) => void;
   onDelete: (seId: string, setId: string) => void;
 }) {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
+  const totalSec = set.durationSeconds ?? 0;
 
   return (
     <View
@@ -73,72 +77,89 @@ function SetRow({
         {set.isWarmup ? 'W' : set.setNumber}
       </Text>
 
-      {/* Reps */}
-      <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
-        <TextInput
-          value={set.reps > 0 ? String(set.reps) : ''}
-          onChangeText={(v) => onUpdate(seId, set.id, { reps: parseInt(v) || 0 })}
-          keyboardType="number-pad"
-          style={[
-            styles.setInput,
-            {
-              color: colors.text,
-              backgroundColor: colors.surface,
-              fontSize: fontSize.base,
-              fontWeight: fontWeight.medium,
-              borderRadius: radius.sm,
-              textAlign: 'center',
-              paddingVertical: spacing[1],
-            },
-          ]}
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-        />
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>reps</Text>
-      </View>
-
-      {/* Weight */}
-      <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
-        <TextInput
-          value={set.weight > 0 ? String(set.weight) : ''}
-          onChangeText={(v) => onUpdate(seId, set.id, { weight: parseFloat(v) || 0 })}
-          keyboardType="decimal-pad"
-          style={[
-            styles.setInput,
-            {
-              color: colors.text,
-              backgroundColor: colors.surface,
-              fontSize: fontSize.base,
-              fontWeight: fontWeight.medium,
-              borderRadius: radius.sm,
-              textAlign: 'center',
-              paddingVertical: spacing[1],
-            },
-          ]}
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-        />
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>{set.unit}</Text>
-      </View>
+      {isCardio ? (
+        /* Duration inputs */
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginLeft: spacing[3], gap: spacing[2] }}>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={String(Math.floor(totalSec / 60))}
+              onChangeText={(v) => {
+                const m = parseInt(v) || 0;
+                const s = totalSec % 60;
+                onUpdate(seId, set.id, { durationSeconds: m * 60 + s });
+              }}
+              keyboardType="number-pad"
+              style={[styles.setInput, { color: colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>min</Text>
+          </View>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={String(totalSec % 60)}
+              onChangeText={(v) => {
+                const s = Math.min(parseInt(v) || 0, 59);
+                const m = Math.floor(totalSec / 60);
+                onUpdate(seId, set.id, { durationSeconds: m * 60 + s });
+              }}
+              keyboardType="number-pad"
+              style={[styles.setInput, { color: colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>sec</Text>
+          </View>
+        </View>
+      ) : (
+        <>
+          {/* Reps */}
+          <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
+            <TextInput
+              value={set.reps > 0 ? String(set.reps) : ''}
+              onChangeText={(v) => onUpdate(seId, set.id, { reps: parseInt(v) || 0 })}
+              keyboardType="number-pad"
+              style={[styles.setInput, { color: colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>reps</Text>
+          </View>
+          {/* Weight */}
+          <View style={[styles.inputWrap, { marginLeft: spacing[3] }]}>
+            <TextInput
+              value={set.weight > 0 ? String(set.weight) : ''}
+              onChangeText={(v) => onUpdate(seId, set.id, { weight: parseFloat(v) || 0 })}
+              keyboardType="decimal-pad"
+              style={[styles.setInput, { color: colors.text, backgroundColor: colors.surface, fontSize: fontSize.base, fontWeight: fontWeight.medium, borderRadius: radius.sm, textAlign: 'center', paddingVertical: spacing[1] }]}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>{set.unit}</Text>
+          </View>
+        </>
+      )}
 
       {/* Warmup toggle + delete */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', gap: spacing[2] }}>
-        <Pressable
-          onPress={() => onUpdate(seId, set.id, { isWarmup: !set.isWarmup })}
-          style={[
-            styles.warmupBtn,
-            {
-              borderRadius: radius.sm,
-              paddingHorizontal: spacing[2],
-              paddingVertical: spacing[1],
-              borderWidth: 1,
-              borderColor: set.isWarmup ? colors.warning : colors.border,
-              backgroundColor: set.isWarmup ? colors.warning + '22' : 'transparent',
-            },
-          ]}
-        >
-          <Text style={{ color: set.isWarmup ? colors.warning : colors.textMuted, fontSize: fontSize.xs }}>W</Text>
-        </Pressable>
+        {!isCardio && (
+          <Pressable
+            onPress={() => onUpdate(seId, set.id, { isWarmup: !set.isWarmup })}
+            style={[
+              styles.warmupBtn,
+              {
+                borderRadius: radius.sm,
+                paddingHorizontal: spacing[2],
+                paddingVertical: spacing[1],
+                borderWidth: 1,
+                borderColor: set.isWarmup ? colors.warning : colors.border,
+                backgroundColor: set.isWarmup ? colors.warning + '22' : 'transparent',
+              },
+            ]}
+          >
+            <Text style={{ color: set.isWarmup ? colors.warning : colors.textMuted, fontSize: fontSize.xs }}>W</Text>
+          </Pressable>
+        )}
         <Pressable onPress={() => onDelete(seId, set.id)} hitSlop={8}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>×</Text>
         </Pressable>
@@ -163,6 +184,7 @@ function ExerciseCard({
   onRemove: (seId: string) => void;
 }) {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
+  const isCardio = exercise.musclePrimary.includes('cardio');
 
   return (
     <View
@@ -195,13 +217,22 @@ function ExerciseCard({
       {exercise.sets.length > 0 && (
         <View style={[styles.setRow, { paddingHorizontal: spacing[3], marginBottom: spacing[1] }]}>
           <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 24, textAlign: 'center' }}>#</Text>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Reps</Text>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 64, textAlign: 'center', marginLeft: spacing[3] }}>Weight</Text>
+          {isCardio ? (
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Min</Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[2] }}>Sec</Text>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 56, textAlign: 'center', marginLeft: spacing[3] }}>Reps</Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, width: 64, textAlign: 'center', marginLeft: spacing[3] }}>Weight</Text>
+            </>
+          )}
         </View>
       )}
 
       {exercise.sets.map((s) => (
-        <SetRow key={s.id} set={s} seId={exercise.seId} onUpdate={onUpdateSet} onDelete={onDeleteSet} />
+        <SetRow key={s.id} set={s} seId={exercise.seId} isCardio={isCardio} onUpdate={onUpdateSet} onDelete={onDeleteSet} />
       ))}
 
       <Pressable
@@ -211,7 +242,7 @@ function ExerciseCard({
           { borderColor: colors.border, borderRadius: radius.md, paddingVertical: spacing[2], marginTop: spacing[1] },
         ]}
       >
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>+ Add Set</Text>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>{isCardio ? '+ Add Interval' : '+ Add Set'}</Text>
       </Pressable>
     </View>
   );
@@ -260,6 +291,7 @@ export default function EditSessionScreen() {
             weight: s.weight,
             unit: s.unit,
             isWarmup: s.isWarmup,
+            durationSeconds: s.durationSeconds ?? null,
             isNew: false,
           }));
 
@@ -308,6 +340,7 @@ export default function EditSessionScreen() {
           weight: prev_?.weight ?? 0,
           unit: prev_?.unit ?? defaultUnit,
           isWarmup: false,
+          durationSeconds: prev_?.durationSeconds ?? null,
           isNew: true,
         };
         return { ...ex, sets: [...ex.sets, newSet] };
@@ -399,6 +432,7 @@ export default function EditSessionScreen() {
                 record.unit = s.unit;
                 record.rpe = null;
                 record.isWarmup = s.isWarmup;
+                record.durationSeconds = s.durationSeconds ?? null;
                 record.completedAt = Date.now();
                 record.isDeleted = false;
                 record.remoteId = null;
@@ -413,6 +447,7 @@ export default function EditSessionScreen() {
                   r.reps = s.reps;
                   r.weight = s.weight;
                   r.isWarmup = s.isWarmup;
+                  r.durationSeconds = s.durationSeconds ?? null;
                   r.syncedAt = null; // mark dirty for re-sync
                 });
               } catch {}

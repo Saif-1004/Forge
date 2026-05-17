@@ -6,3 +6,6 @@ export { PersonalRecord } from './PersonalRecord';
 export { FoodLog } from './FoodLog';
 export { WaterLog } from './WaterLog';
 export { Food } from './Food';
+export { WorkoutTemplate } from './WorkoutTemplate';
+export { TemplateExercise } from './TemplateExercise';
+export { BodyWeightLog } from './BodyWeightLog';

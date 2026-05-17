@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, Alert, Share } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Q } from '@nozbe/watermelondb';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuthStore } from '@/store/authStore';
 import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
-import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise } from '@/lib/watermelon/models';
+import type { WorkoutSession, SessionExercise, Set as SetModel, Exercise, WorkoutTemplate, TemplateExercise } from '@/lib/watermelon/models';
 
 interface SetDetail {
   setNumber: number;
@@ -14,13 +15,22 @@ interface SetDetail {
   weight: number;
   unit: string;
   isWarmup: boolean;
+  durationSeconds: number | null;
 }
 
 interface ExerciseDetail {
   seId: string;
+  exerciseId: string;
   exerciseName: string;
   musclePrimary: string[];
   sets: SetDetail[];
+}
+
+function formatDurationDisplay(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
 }
 
 interface SessionDetail {
@@ -68,10 +78,75 @@ export default function SessionDetailScreen() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuthStore();
 
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  const handleShare = useCallback(() => {
+    if (!detail) return;
+    const muscles = [...new Set(detail.exercises.flatMap((e) => e.musclePrimary))].slice(0, 4);
+    const duration = detail.endedAt ? formatDuration(detail.startedAt, detail.endedAt) : '';
+    const sets = detail.totalSets;
+    const vol = detail.totalVolume > 0
+      ? ` · ${detail.totalVolume >= 1000 ? `${(detail.totalVolume / 1000).toFixed(1)}k` : detail.totalVolume} kg vol`
+      : '';
+    const muscleStr = muscles.map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ');
+    Share.share({
+      message: `🏋️ Just finished a workout on Pumped!\n\n${duration ? `${duration} · ` : ''}${sets} sets${vol}\n${muscleStr}\n\nhttps://pumpedapp.io`,
+    });
+  }, [detail]);
+
+  const handleSaveAsTemplate = useCallback(() => {
+    if (!detail || !user) return;
+    Alert.prompt(
+      'Save as Template',
+      'Give this template a name:',
+      async (name) => {
+        if (!name?.trim()) return;
+        setSavingTemplate(true);
+        try {
+          const tCol = database.collections.get<WorkoutTemplate>('workout_templates');
+          const teCol = database.collections.get<TemplateExercise>('template_exercises');
+          await database.write(async () => {
+            const t = await tCol.create((r) => {
+              r.userId = user.id;
+              r.name = name.trim();
+              r.notes = null;
+              r.createdAt = Date.now();
+              r.isDeleted = false;
+              r.remoteId = null;
+              r.syncedAt = null;
+            });
+            for (let i = 0; i < detail.exercises.length; i++) {
+              const ex = detail.exercises[i];
+              const workingSets = ex.sets.filter((s) => !s.isWarmup);
+              const lastSet = workingSets[workingSets.length - 1] ?? ex.sets[0];
+              await teCol.create((r) => {
+                r.templateId = t.id;
+                r.exerciseId = ex.exerciseId;
+                r.orderIndex = i;
+                r.defaultSets = Math.max(workingSets.length, 1);
+                r.defaultReps = lastSet?.reps ?? 10;
+                r.defaultWeight = lastSet?.weight ?? 0;
+                r.defaultUnit = lastSet?.unit ?? 'kg';
+                r.isDeleted = false;
+                r.remoteId = null;
+                r.syncedAt = null;
+              });
+            }
+          });
+          Alert.alert('Template saved!', `"${name.trim()}" is ready to use.`);
+        } finally {
+          setSavingTemplate(false);
+        }
+      },
+      'plain-text',
+      '',
+    );
+  }, [detail, user]);
 
   useEffect(() => {
     if (!id) return;
@@ -110,11 +185,12 @@ export default function SessionDetailScreen() {
             weight: s.weight,
             unit: s.unit,
             isWarmup: s.isWarmup,
+            durationSeconds: s.durationSeconds ?? null,
           }));
 
           totalSets += setDetails.length;
           totalVolume += setDetails.reduce((acc, s) => acc + s.reps * s.weight, 0);
-          exercises.push({ seId: se.id, exerciseName, musclePrimary, sets: setDetails });
+          exercises.push({ seId: se.id, exerciseId: se.exerciseId, exerciseName, musclePrimary, sets: setDetails });
         }
 
         setDetail({ startedAt: session.startedAt, endedAt: session.endedAt, exercises, totalSets, totalVolume });
@@ -143,12 +219,29 @@ export default function SessionDetailScreen() {
           Session
         </Text>
         {detail && (
-          <Pressable
-            onPress={() => router.push(`/workout/edit/${id}`)}
-            style={[styles.editBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[2] }]}
-          >
-            <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>Edit</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+            <Pressable
+              onPress={handleShare}
+              style={[styles.editBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }]}
+            >
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Share</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSaveAsTemplate}
+              disabled={savingTemplate}
+              style={[styles.editBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }]}
+            >
+              {savingTemplate
+                ? <ActivityIndicator size="small" color={colors.textMuted} />
+                : <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Template</Text>}
+            </Pressable>
+            <Pressable
+              onPress={() => router.push(`/workout/edit/${id}`)}
+              style={[styles.editBtn, { borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[2] }]}
+            >
+              <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>Edit</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -192,47 +285,64 @@ export default function SessionDetailScreen() {
                 {MUSCLE_GROUP_LABELS[group] ?? group}
               </Text>
 
-              {items.map((ex) => (
-                <View
-                  key={ex.seId}
-                  style={[
-                    styles.exerciseCard,
-                    { borderColor: colors.border, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[3] },
-                  ]}
-                >
-                  <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold, marginBottom: 2 }}>
-                    {ex.exerciseName}
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: spacing[3] }}>
-                    {ex.musclePrimary.map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ')}
-                  </Text>
+              {items.map((ex) => {
+                const isCardio = ex.musclePrimary.includes('cardio');
+                return (
+                  <View
+                    key={ex.seId}
+                    style={[
+                      styles.exerciseCard,
+                      { borderColor: colors.border, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[3] },
+                    ]}
+                  >
+                    <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold, marginBottom: 2 }}>
+                      {ex.exerciseName}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: spacing[3] }}>
+                      {ex.musclePrimary.map((m) => MUSCLE_GROUP_LABELS[m] ?? m).join(' · ')}
+                    </Text>
 
-                  {/* Set table */}
-                  <View style={[styles.setRow, { marginBottom: spacing[1] }]}>
-                    <Text style={[styles.setNum, { color: colors.textMuted, fontSize: fontSize.xs }]}>#</Text>
-                    <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Reps</Text>
-                    <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Weight</Text>
-                    <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Vol</Text>
-                  </View>
-
-                  {ex.sets.map((s) => (
-                    <View key={s.setNumber} style={[styles.setRow, { paddingVertical: 3 }]}>
-                      <Text style={[styles.setNum, { color: s.isWarmup ? colors.textMuted : colors.text, fontSize: fontSize.sm }]}>
-                        {s.isWarmup ? 'W' : s.setNumber}
-                      </Text>
-                      <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
-                        {s.reps}
-                      </Text>
-                      <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
-                        {s.weight} {s.unit}
-                      </Text>
-                      <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.sm }]}>
-                        {(s.reps * s.weight).toLocaleString()}
-                      </Text>
+                    {/* Set table */}
+                    <View style={[styles.setRow, { marginBottom: spacing[1] }]}>
+                      <Text style={[styles.setNum, { color: colors.textMuted, fontSize: fontSize.xs }]}>#</Text>
+                      {isCardio ? (
+                        <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Duration</Text>
+                      ) : (
+                        <>
+                          <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Reps</Text>
+                          <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Weight</Text>
+                          <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.xs }]}>Vol</Text>
+                        </>
+                      )}
                     </View>
-                  ))}
-                </View>
-              ))}
+
+                    {ex.sets.map((s) => (
+                      <View key={s.setNumber} style={[styles.setRow, { paddingVertical: 3 }]}>
+                        <Text style={[styles.setNum, { color: s.isWarmup ? colors.textMuted : colors.text, fontSize: fontSize.sm }]}>
+                          {s.isWarmup ? 'W' : s.setNumber}
+                        </Text>
+                        {isCardio ? (
+                          <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
+                            {s.durationSeconds ? formatDurationDisplay(s.durationSeconds) : '—'}
+                          </Text>
+                        ) : (
+                          <>
+                            <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
+                              {s.reps}
+                            </Text>
+                            <Text style={[styles.setWide, { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
+                              {s.weight} {s.unit}
+                            </Text>
+                            <Text style={[styles.setWide, { color: colors.textMuted, fontSize: fontSize.sm }]}>
+                              {(s.reps * s.weight).toLocaleString()}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })}
             </View>
           ))}
         </ScrollView>

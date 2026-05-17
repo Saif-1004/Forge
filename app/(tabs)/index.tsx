@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, Image, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, Image, ScrollView, Pressable, ActivityIndicator, StyleSheet, Share } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Q } from '@nozbe/watermelondb';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
-import type { WorkoutSession, SessionExercise, Exercise, Set as SetModel } from '@/lib/watermelon/models';
+import { getOverloadSuggestions, type OverloadSuggestion } from '@/lib/pr/progressiveOverload';
+import type { WorkoutSession, SessionExercise, Exercise, Set as SetModel, FoodLog } from '@/lib/watermelon/models';
 
 function toISODate(d: Date): string {
   const y = d.getFullYear();
@@ -57,16 +59,19 @@ interface HomeData {
 }
 
 export default function HomeTab() {
-  const { colors, fontSize, fontWeight, spacing, radius, scheme } = useTheme();
+  const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, displayName } = useAuthStore();
 
+  const { calorieGoal, proteinGoal, carbsGoal, fatGoal } = useSettingsStore();
   const [data, setData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [nutritionToday, setNutritionToday] = useState<{ calories: number; protein: number; carbs: number; fat: number } | null>(null);
+  const [overloadSuggestions, setOverloadSuggestions] = useState<OverloadSuggestion[]>([]);
 
-  const today = new Date();
-  const todayStr = toISODate(today);
-  const days = weekDates();
+  const today = useMemo(() => new Date(), []);
+  const todayStr = useMemo(() => toISODate(today), [today]);
+  const days = useMemo(() => weekDates(), []);
   const DAYS_LABEL = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   const load = useCallback(async () => {
@@ -104,22 +109,36 @@ export default function HomeTab() {
       const exCol = database.collections.get<Exercise>('exercises');
 
       if (allSessions.length > 0) {
-        // Load last workout details
         const s = allSessions[0];
+        const setsCol = database.collections.get<SetModel>('sets');
         const ses = await seCol
           .query(Q.where('session_id', s.id), Q.where('is_deleted', false))
           .fetch();
+
+        const seIds = ses.map((se) => se.id);
+        const exIds = [...new Set(ses.map((se) => se.exerciseId))];
+        const lastExMap = new Map<string, Exercise>();
+        await Promise.all(exIds.map(async (id) => {
+          try { lastExMap.set(id, await exCol.find(id)); } catch {}
+        }));
+        const allSets = seIds.length > 0
+          ? await setsCol.query(Q.where('session_exercise_id', Q.oneOf(seIds))).fetch()
+          : [];
+        const setsBySE = new Map<string, SetModel[]>();
+        for (const set of allSets) {
+          const bucket = setsBySE.get(set.sessionExerciseId) ?? [];
+          bucket.push(set);
+          setsBySE.set(set.sessionExerciseId, bucket);
+        }
+
         const muscles: string[] = [];
         let totalSets = 0;
         for (const se of ses) {
-          try {
-            const ex = await exCol.find(se.exerciseId);
-            if (ex.musclePrimary[0] && !muscles.includes(ex.musclePrimary[0])) {
-              muscles.push(ex.musclePrimary[0]);
-            }
-          } catch {}
-          const setsRaw = await se.sets.fetch() as SetModel[];
-          const active = setsRaw.filter((st) => !st.isDeleted);
+          const ex = lastExMap.get(se.exerciseId);
+          if (ex?.musclePrimary[0] && !muscles.includes(ex.musclePrimary[0])) {
+            muscles.push(ex.musclePrimary[0]);
+          }
+          const active = (setsBySE.get(se.id) ?? []).filter((st) => !st.isDeleted);
           totalSets += active.length;
           totalVolume += active.reduce((acc, st) => acc + st.reps * st.weight, 0);
         }
@@ -130,9 +149,31 @@ export default function HomeTab() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, days, todayStr]);
 
   useEffect(() => { load(); }, [load]);
+
+  useFocusEffect(useCallback(() => {
+    if (!user) return;
+    getOverloadSuggestions(user.id).then(setOverloadSuggestions).catch(() => {});
+  }, [user]));
+
+  useFocusEffect(useCallback(() => {
+    if (!user) return;
+    const dateStr = todayStr;
+    const logsCol = database.collections.get<FoodLog>('food_logs');
+    logsCol
+      .query(Q.where('user_id', user.id), Q.where('date', dateStr), Q.where('is_deleted', false))
+      .fetch()
+      .then((logs) => {
+        const totals = logs.reduce(
+          (acc, l) => ({ calories: acc.calories + l.caloriesKcal, protein: acc.protein + l.proteinG, carbs: acc.carbs + l.carbsG, fat: acc.fat + l.fatG }),
+          { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        );
+        setNutritionToday(totals);
+      })
+      .catch(() => {});
+  }, [user, todayStr]));
 
   const name = displayName ?? user?.email?.split('@')[0] ?? '';
 
@@ -217,7 +258,13 @@ export default function HomeTab() {
                 session{data?.sessionsThisWeek !== 1 ? 's' : ''}
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4] }]}>
+            <Pressable
+              onPress={() => {
+                const s = data?.streak ?? 0;
+                if (s > 0) Share.share({ message: `🔥 ${s}-day workout streak on Pumped! Consistency is everything.\n\nhttps://pumpedapp.io` });
+              }}
+              style={[styles.statCard, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4] }]}
+            >
               <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: 4 }}>STREAK</Text>
               <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold }}>
                 {data?.streak ?? 0}
@@ -225,7 +272,7 @@ export default function HomeTab() {
               <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                 day{data?.streak !== 1 ? 's' : ''}
               </Text>
-            </View>
+            </Pressable>
           </View>
 
           {/* Last workout */}
@@ -268,6 +315,69 @@ export default function HomeTab() {
             </View>
           )}
 
+          {/* Progressive overload suggestions */}
+          {overloadSuggestions.length > 0 && (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing[3] }}>
+                <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold, flex: 1 }}>Ready to Progress</Text>
+                <Text style={{ fontSize: 16 }}>📈</Text>
+              </View>
+              {overloadSuggestions.map((s) => (
+                <View key={s.exerciseId} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing[2], borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>{s.exerciseName}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
+                      Hit {s.reps}+ reps for {s.sessionsHit} sessions at {s.currentWeight}{s.unit}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.bold }}>
+                      → {s.suggestedWeight}{s.unit}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>try this weight</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Today's nutrition */}
+          {nutritionToday !== null && (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }]}>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[2] }}>TODAY'S NUTRITION</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: spacing[2] }}>
+                <Text style={{ color: colors.text, fontSize: fontSize.xl, fontWeight: fontWeight.bold, flex: 1 }}>
+                  {Math.round(nutritionToday.calories)} kcal
+                </Text>
+                {calorieGoal > 0 && (
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: 2 }}>/ {calorieGoal}</Text>
+                )}
+              </View>
+              {calorieGoal > 0 && (
+                <View style={{ height: 3, backgroundColor: colors.border, borderRadius: 2, marginBottom: spacing[3] }}>
+                  <View style={{ height: 3, width: `${Math.min(nutritionToday.calories / calorieGoal, 1) * 100}%`, backgroundColor: colors.text, borderRadius: 2 }} />
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: spacing[5] }}>
+                {[
+                  { label: 'P', value: nutritionToday.protein, goal: proteinGoal, color: '#3B82F6' },
+                  { label: 'C', value: nutritionToday.carbs, goal: carbsGoal, color: '#F59E0B' },
+                  { label: 'F', value: nutritionToday.fat, goal: fatGoal, color: '#EF4444' },
+                ].map(({ label, value, goal, color }) => (
+                  <View key={label} style={{ alignItems: 'center', flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>
+                      {Math.round(value)}<Text style={{ color: colors.textMuted, fontWeight: '400' }}>g</Text>
+                    </Text>
+                    <View style={{ height: 3, width: '100%', backgroundColor: colors.border, borderRadius: 2, marginTop: 4 }}>
+                      <View style={{ height: 3, width: `${goal > 0 ? Math.min(value / goal, 1) * 100 : 0}%`, backgroundColor: color, borderRadius: 2 }} />
+                    </View>
+                    <Text style={{ color: colors.textMuted, fontSize: 9, marginTop: 2 }}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Lifetime stats */}
           {(data?.totalSessions ?? 0) > 0 && (
             <View style={[styles.statsRow, { marginBottom: spacing[4] }]}>
@@ -289,6 +399,31 @@ export default function HomeTab() {
               </View>
             </View>
           )}
+
+          {/* AI Coach card */}
+          <Pressable
+            onPress={() => router.push('/coach')}
+            style={({ pressed }) => [
+              styles.card,
+              { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4], opacity: pressed ? 0.7 : 1, flexDirection: 'row', alignItems: 'center' },
+            ]}
+          >
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', marginRight: spacing[4] }}>
+              <Text style={{ fontSize: 22 }}>🤖</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: 2 }}>
+                <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>AI Coach</Text>
+                <View style={{ backgroundColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing[2], paddingVertical: 1 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 9, fontWeight: '600', letterSpacing: 0.5 }}>PRO</Text>
+                </View>
+              </View>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
+                Ask about training, nutrition, or get a program
+              </Text>
+            </View>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>→</Text>
+          </Pressable>
 
           {/* Leaderboard card */}
           <LeaderboardCard

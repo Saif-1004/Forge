@@ -69,6 +69,7 @@ async function loadSessions(userId: string): Promise<SessionRow[]> {
   const sessionsCol = database.collections.get<WorkoutSession>('workout_sessions');
   const seCol = database.collections.get<SessionExercise>('session_exercises');
   const exCol = database.collections.get<Exercise>('exercises');
+  const setsCol = database.collections.get<SetModel>('sets');
 
   const raw = await sessionsCol
     .query(
@@ -79,34 +80,59 @@ async function loadSessions(userId: string): Promise<SessionRow[]> {
     )
     .fetch();
 
-  return Promise.all(
-    raw.map(async (session) => {
-      const ses = await seCol
-        .query(Q.where('session_id', session.id), Q.where('is_deleted', false))
-        .fetch();
+  if (raw.length === 0) return [];
 
-      let totalSets = 0;
-      const muscleSet = new Set<string>();
+  const sessionIds = raw.map((s) => s.id);
+  const allSEs = await seCol
+    .query(Q.where('session_id', Q.oneOf(sessionIds)), Q.where('is_deleted', false))
+    .fetch();
 
-      for (const se of ses) {
-        const sets = await se.sets.fetch() as SetModel[];
-        totalSets += sets.filter((s) => !s.isDeleted).length;
-        try {
-          const ex = await exCol.find(se.exerciseId);
-          ex.musclePrimary.forEach((m) => muscleSet.add(m));
-        } catch {}
-      }
+  const seIds = allSEs.map((se) => se.id);
+  const allSets = seIds.length > 0
+    ? await setsCol.query(Q.where('session_exercise_id', Q.oneOf(seIds))).fetch()
+    : [];
 
-      return {
-        id: session.id,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        exerciseCount: ses.length,
-        setCount: totalSets,
-        muscleGroups: Array.from(muscleSet),
-      };
-    }),
-  );
+  const exerciseIds = [...new Set(allSEs.map((se) => se.exerciseId))];
+  const exerciseMap = new Map<string, Exercise>();
+  await Promise.all(exerciseIds.map(async (id) => {
+    try { exerciseMap.set(id, await exCol.find(id)); } catch {}
+  }));
+
+  const setsBySE = new Map<string, SetModel[]>();
+  for (const set of allSets) {
+    const bucket = setsBySE.get(set.sessionExerciseId) ?? [];
+    bucket.push(set);
+    setsBySE.set(set.sessionExerciseId, bucket);
+  }
+
+  const seBySession = new Map<string, SessionExercise[]>();
+  for (const se of allSEs) {
+    const bucket = seBySession.get(se.sessionId) ?? [];
+    bucket.push(se);
+    seBySession.set(se.sessionId, bucket);
+  }
+
+  return raw.map((session) => {
+    const ses = seBySession.get(session.id) ?? [];
+    let totalSets = 0;
+    const muscleSet = new Set<string>();
+
+    for (const se of ses) {
+      const sets = setsBySE.get(se.id) ?? [];
+      totalSets += sets.filter((s) => !s.isDeleted).length;
+      const ex = exerciseMap.get(se.exerciseId);
+      if (ex) ex.musclePrimary.forEach((m) => muscleSet.add(m));
+    }
+
+    return {
+      id: session.id,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      exerciseCount: ses.length,
+      setCount: totalSets,
+      muscleGroups: Array.from(muscleSet),
+    };
+  });
 }
 
 async function deleteSession(sessionId: string): Promise<void> {
