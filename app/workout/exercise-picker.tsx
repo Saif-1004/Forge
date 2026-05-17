@@ -152,7 +152,7 @@ export default function ExercisePickerScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2], alignItems: 'center' }}
+        contentContainerStyle={{ paddingHorizontal: spacing[5], paddingVertical: spacing[3], gap: spacing[2] }}
         style={{ flexShrink: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
       >
         {FILTER_GROUPS.map((item) => {
@@ -196,7 +196,6 @@ export default function ExercisePickerScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: spacing[5], paddingBottom: insets.bottom + 24 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border }} />}
           renderItem={({ item }) => {
