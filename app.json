@@ -17,6 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.forgeapp.workout",
       "usesAppleSignIn": true,
+      "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
