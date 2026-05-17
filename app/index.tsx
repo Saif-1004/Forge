@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/useTheme';
 
 export default function Index() {
-  const { session, isLoading, onboardingCompleted, setSession } = useAuthStore();
+  const { session, isLoading, onboardingCompleted } = useAuthStore();
   const { colors } = useTheme();
 
   // Safety escape hatch — if loading hasn't resolved in 8s, unblock anyway

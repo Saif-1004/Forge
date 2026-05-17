@@ -344,7 +344,7 @@ export default function HomeTab() {
           {/* Today's nutrition */}
           {nutritionToday !== null && (
             <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }]}>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[2] }}>TODAY'S NUTRITION</Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[2] }}>TODAY&apos;S NUTRITION</Text>
               <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: spacing[2] }}>
                 <Text style={{ color: colors.text, fontSize: fontSize.xl, fontWeight: fontWeight.bold, flex: 1 }}>
                   {Math.round(nutritionToday.calories)} kcal

@@ -4,6 +4,9 @@ const expo = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expo,
   {
+    ignores: ['supabase/functions/**'],
+  },
+  {
     settings: {
       react: { version: '18.3' },
     },

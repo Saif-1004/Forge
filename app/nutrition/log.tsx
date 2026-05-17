@@ -531,7 +531,7 @@ export default function LogFoodScreen() {
                   AI Food Recognition
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20 }}>
-                  Take a photo of your meal and AI will estimate the calories and macros. You'll be able to verify and adjust before logging.
+                  Take a photo of your meal and AI will estimate the calories and macros. You&apos;ll be able to verify and adjust before logging.
                 </Text>
               </View>
               <Pressable
