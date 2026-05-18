@@ -29,7 +29,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ session: null, user: null, isLoading: false, onboardingCompleted: false, unitPreference: 'kg', displayName: null });
       return;
     }
-    set({ isLoading: true });
+    set({ session, user: session.user, isLoading: true });
     try {
       const { data } = await supabase
         .from('users')
@@ -38,8 +38,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .maybeSingle() as { data: { onboarding_completed_at: string | null; unit_system: 'imperial' | 'metric' | null; display_name: string | null } | null };
 
       set({
-        session,
-        user: session.user,
         onboardingCompleted: !!data?.onboarding_completed_at,
         unitPreference: data?.unit_system === 'metric' ? 'kg' : 'lbs',
         displayName: data?.display_name ?? null,

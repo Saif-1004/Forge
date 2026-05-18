@@ -37,16 +37,20 @@ export default function RootLayout() {
     }).catch(() => {});
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        await setSession(session);
-        if (event === 'SIGNED_IN') {
-          const { onboardingCompleted, user } = useAuthStore.getState();
-          if (user) configureRevenueCat(user.id).catch(() => {});
-          router.replace(onboardingCompleted ? '/(tabs)' : '/onboarding/name');
-        } else if (event === 'SIGNED_OUT') {
-          signOutRevenueCat().catch(() => {});
-          router.replace('/(auth)');
-        }
+      (event, session) => {
+        // Must NOT be async — Supabase awaits async callbacks while holding its
+        // internal lock, causing a deadlock when setSession calls supabase.from().
+        // Fire setSession without await so the lock releases immediately.
+        setSession(session).then(() => {
+          if (event === 'SIGNED_IN') {
+            const { onboardingCompleted, user } = useAuthStore.getState();
+            if (user) configureRevenueCat(user.id).catch(() => {});
+            router.replace(onboardingCompleted ? '/(tabs)' : '/onboarding/name');
+          } else if (event === 'SIGNED_OUT') {
+            signOutRevenueCat().catch(() => {});
+            router.replace('/(auth)');
+          }
+        }).catch(() => {});
       },
     );
 

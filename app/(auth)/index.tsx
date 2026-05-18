@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, Image, StyleSheet, Pressable, Platform, ActivityIndicator } from 'react-native';
+import Svg, { Path, G, ClipPath, Defs, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -10,6 +11,18 @@ import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/Button';
 
 WebBrowser.maybeCompleteAuthSession();
+
+function GoogleIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 48 48" style={{ marginRight: 10 }}>
+      <Path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <Path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <Path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <Path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      <Path fill="none" d="M0 0h48v48H0z"/>
+    </Svg>
+  );
+}
 
 export default function AuthLandingScreen() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
@@ -58,12 +71,7 @@ export default function AuthLandingScreen() {
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success' && result.url) {
-        const parsed = Linking.parse(result.url);
-        const accessToken = parsed.queryParams?.access_token as string | undefined;
-        const refreshToken = parsed.queryParams?.refresh_token as string | undefined;
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        }
+        await supabase.auth.exchangeCodeForSession(result.url);
       }
     } catch {
       setError('Google sign in failed. Please try again.');
@@ -116,14 +124,17 @@ export default function AuthLandingScreen() {
             styles.googleBtn,
             {
               borderRadius: radius.lg,
-              borderColor: colors.border,
-              backgroundColor: colors.background,
-              opacity: googleLoading ? 0.5 : 1,
+              backgroundColor: '#000',
+              opacity: googleLoading ? 0.6 : 1,
             },
           ]}
         >
-          <Text style={{ fontSize: 18, marginRight: 8 }}>G</Text>
-          <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.medium }}>
+          {googleLoading ? (
+            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 10 }} />
+          ) : (
+            <GoogleIcon />
+          )}
+          <Text style={{ color: '#fff', fontSize: fontSize.base, fontWeight: fontWeight.medium }}>
             {googleLoading ? 'Signing in...' : 'Continue with Google'}
           </Text>
         </Pressable>
@@ -153,7 +164,6 @@ const styles = StyleSheet.create({
   footer: { gap: 0 },
   googleBtn: {
     height: 50,
-    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

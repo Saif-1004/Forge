@@ -184,20 +184,25 @@ export default function HomeTab() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header: greeting + logo */}
-      <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: 2 }}>
-            {greeting()}
-          </Text>
-          <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold }}>
-            {name || 'Welcome'}
-          </Text>
+      <View style={{ marginBottom: spacing[5] }}>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: spacing[2] }}>
+          {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, letterSpacing: -0.3 }}>
+              {greeting()},
+            </Text>
+            <Text style={{ color: colors.text, fontSize: 34, fontWeight: fontWeight.bold, letterSpacing: -0.5, lineHeight: 38 }}>
+              {name || 'Welcome'}
+            </Text>
+          </View>
+          <Image
+            source={require('@/assets/pumped_logo_transparent.png')}
+            style={[styles.logo, { tintColor: colors.text }]}
+            resizeMode="contain"
+          />
         </View>
-        <Image
-          source={require('@/assets/pumped_logo_transparent.png')}
-          style={[styles.logo, { tintColor: colors.text }]}
-          resizeMode="contain"
-        />
       </View>
 
       {loading ? (
