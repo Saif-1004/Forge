@@ -31,7 +31,7 @@ export async function configureRevenueCat(userId: string): Promise<void> {
     return;
   }
 
-  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.SILENT);
+  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
   Purchases.configure({ apiKey, appUserID: userId });
   _configured = true;
 }
