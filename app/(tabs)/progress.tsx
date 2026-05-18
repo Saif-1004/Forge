@@ -142,7 +142,7 @@ function BodyWeightCard({ entries, userId, onSaved, colors, fontSize, fontWeight
 
   const save = async () => {
     const w = parseFloat(input);
-    if (!w) return;
+    if (!w || !userId) return;
     setSaving(true);
     try {
       const bwCol = database.collections.get<BodyWeightLog>('body_weight_logs');
@@ -482,7 +482,7 @@ export default function ProgressTab() {
 
       {loading ? (
         <ActivityIndicator color={colors.text} style={{ marginTop: spacing[10] }} />
-      ) : !data ? null : (
+      ) : !data || !user ? null : (
         <>
           {/* Volume chart */}
           <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }]}>
@@ -523,7 +523,7 @@ export default function ProgressTab() {
           {/* Body weight */}
           <BodyWeightCard
             entries={data.weightEntries}
-            userId={user!.id}
+            userId={user?.id ?? ''}
             onSaved={load}
             colors={colors}
             fontSize={fontSize}

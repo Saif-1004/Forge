@@ -61,7 +61,7 @@ export default function AuthLandingScreen() {
     setError(null);
     setGoogleLoading(true);
     try {
-      const redirectTo = Linking.createURL('/');
+      const redirectTo = 'forge://auth-callback';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },
@@ -72,6 +72,10 @@ export default function AuthLandingScreen() {
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success' && result.url) {
         await supabase.auth.exchangeCodeForSession(result.url);
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        // User closed the browser without completing sign-in — silent, no error
+      } else {
+        setError('Google sign in failed. Please try again.');
       }
     } catch {
       setError('Google sign in failed. Please try again.');
