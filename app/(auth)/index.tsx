@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Image, StyleSheet, Pressable, Platform, ActivityIndicator } from 'react-native';
-import Svg, { Path, G, ClipPath, Defs, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';

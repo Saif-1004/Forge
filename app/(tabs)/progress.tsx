@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, TextInput, Share } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, TextInput, Share, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Q } from '@nozbe/watermelondb';
+import Svg, { Path, Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { database } from '@/lib/watermelon/database';
@@ -93,6 +94,211 @@ function VolumeBar({ bar, maxVol, colors, fontSize, fontWeight, spacing, radius 
   );
 }
 
+// ─── Body Weight Card ─────────────────────────────────────────────────────────
+
+const SCREEN_W = Dimensions.get('window').width;
+
+function BodyWeightCard({ entries, userId, onSaved, colors, fontSize, fontWeight, spacing, radius }: {
+  entries: WeightEntry[];
+  userId: string;
+  onSaved: () => void;
+  colors: any; fontSize: any; fontWeight: any; spacing: any; radius: any;
+}) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [logging, setLogging] = useState(false);
+  const [input, setInput] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const latest = entries[entries.length - 1];
+  const first = entries[0];
+  const diff = latest && first && entries.length > 1 ? +(latest.weight - first.weight).toFixed(1) : null;
+
+  // chart dimensions
+  const CARD_PAD = spacing[4] * 2;
+  const CHART_W = SCREEN_W - spacing[5] * 2 - CARD_PAD;
+  const CHART_H = 130;
+  const PX = 6;
+  const PY = 12;
+
+  const weights = entries.map((e) => e.weight);
+  const minW = entries.length ? Math.min(...weights) : 0;
+  const maxW = entries.length ? Math.max(...weights) : 0;
+  const range = maxW - minW || 0.5;
+
+  const pts = entries.map((e, i) => ({
+    x: entries.length === 1 ? CHART_W / 2 : PX + (i / (entries.length - 1)) * (CHART_W - PX * 2),
+    y: PY + (1 - (e.weight - minW) / range) * (CHART_H - PY * 2),
+    ...e,
+  }));
+
+  const linePath = pts.length > 1
+    ? pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+    : '';
+  const areaPath = pts.length > 1
+    ? `${linePath} L${pts[pts.length - 1].x.toFixed(1)},${CHART_H} L${pts[0].x.toFixed(1)},${CHART_H} Z`
+    : '';
+
+  const selectedPt = selected !== null ? pts[selected] : null;
+
+  const save = async () => {
+    const w = parseFloat(input);
+    if (!w) return;
+    setSaving(true);
+    try {
+      const bwCol = database.collections.get<BodyWeightLog>('body_weight_logs');
+      const today = toISODate(new Date());
+      await database.write(async () => {
+        await bwCol.create((r) => {
+          r.userId = userId;
+          r.weight = w;
+          r.unit = 'kg';
+          r.loggedAt = Date.now();
+          r.date = today;
+          r.notes = null;
+          r.isDeleted = false;
+          r.remoteId = null;
+          r.syncedAt = null;
+        });
+      });
+      setLogging(false);
+      setInput('');
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing[3] }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: spacing[1] }}>
+            Body Weight
+          </Text>
+          {latest ? (
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              <Text style={{ color: colors.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 }}>
+                {latest.weight}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>kg</Text>
+              {diff !== null && (
+                <Text style={{
+                  color: diff < 0 ? colors.success : diff > 0 ? colors.error : colors.textMuted,
+                  fontSize: fontSize.sm, fontWeight: '500',
+                }}>
+                  {diff > 0 ? '+' : ''}{diff} kg
+                </Text>
+              )}
+            </View>
+          ) : (
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>No entries yet</Text>
+          )}
+          {latest && (
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
+              Last logged {formatDate(latest.loggedAt)}
+            </Text>
+          )}
+        </View>
+        <Pressable
+          onPress={() => setLogging(true)}
+          style={{ backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}
+        >
+          <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: '500' }}>+ Log</Text>
+        </Pressable>
+      </View>
+
+      {/* Log input */}
+      {logging && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[3], backgroundColor: colors.background, borderRadius: radius.lg, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Weight in kg"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            autoFocus
+            style={{ flex: 1, color: colors.text, fontSize: fontSize.lg, fontWeight: '600' }}
+          />
+          <Pressable onPress={() => { setLogging(false); setInput(''); }} hitSlop={8}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
+          </Pressable>
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.text} />
+          ) : (
+            <Pressable onPress={save} style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}>
+              <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: '600' }}>Save</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* Tooltip for selected point */}
+      {selectedPt && (
+        <View style={{ alignItems: 'center', marginBottom: spacing[2] }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: '600' }}>
+            {selectedPt.weight} kg
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+            {formatDate(selectedPt.loggedAt)}
+          </Text>
+        </View>
+      )}
+
+      {/* Line chart */}
+      {entries.length >= 2 && (
+        <>
+          <Svg width={CHART_W} height={CHART_H}>
+            <Defs>
+              <SvgLinearGradient id="bwGrad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={colors.text} stopOpacity="0.12" />
+                <Stop offset="100%" stopColor={colors.text} stopOpacity="0" />
+              </SvgLinearGradient>
+            </Defs>
+            <Path d={areaPath} fill="url(#bwGrad)" />
+            <Path d={linePath} stroke={colors.text} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            {pts.map((p, i) => (
+              <Circle
+                key={i}
+                cx={p.x}
+                cy={p.y}
+                r={selected === i ? 5 : 3}
+                fill={selected === i ? colors.text : colors.surface}
+                stroke={colors.text}
+                strokeWidth={1.5}
+                onPress={() => setSelected(selected === i ? null : i)}
+              />
+            ))}
+          </Svg>
+          {/* X-axis: first and last dates */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 10 }}>
+              {new Date(entries[0].loggedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 10 }}>
+              {new Date(entries[entries.length - 1].loggedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+            </Text>
+          </View>
+        </>
+      )}
+
+      {entries.length === 1 && (
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, textAlign: 'center', paddingVertical: spacing[2] }}>
+          Log one more entry to see your trend
+        </Text>
+      )}
+
+      {entries.length === 0 && !logging && (
+        <Pressable onPress={() => setLogging(true)} style={{ paddingVertical: spacing[3], alignItems: 'center' }}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
+            Tap + Log to record your first weigh-in
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 // ─── Load data ────────────────────────────────────────────────────────────────
 
 async function loadProgressData(userId: string): Promise<ProgressData> {
@@ -152,7 +358,6 @@ async function loadProgressData(userId: string): Promise<ProgressData> {
 
   // Muscle groups trained this week
   const weekStart = thisWeekStart.getTime();
-  const thisWeekSessions = allSessions.filter((s) => s.startedAt >= weekStart);
   const muscleSet = new Set<string>();
 
   if (allSessions.length > 0) {
@@ -215,7 +420,7 @@ async function loadProgressData(userId: string): Promise<ProgressData> {
   const bwRaw = await bwCol
     .query(Q.where('user_id', userId), Q.where('is_deleted', false), Q.sortBy('logged_at', Q.desc))
     .fetch();
-  const weightEntries: WeightEntry[] = bwRaw.slice(0, 14).reverse().map((w) => ({
+  const weightEntries: WeightEntry[] = bwRaw.slice(0, 60).reverse().map((w) => ({
     date: w.date, weight: w.weight, unit: w.unit, loggedAt: w.loggedAt,
   }));
 
@@ -242,9 +447,6 @@ export default function ProgressTab() {
   const [data, setData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [weightInput, setWeightInput] = useState('');
-  const [loggingWeight, setLoggingWeight] = useState(false);
-  const [savingWeight, setSavingWeight] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -259,34 +461,6 @@ export default function ProgressTab() {
   }, [user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const handleLogWeight = async () => {
-    const w = parseFloat(weightInput);
-    if (!w || !user) return;
-    setSavingWeight(true);
-    try {
-      const bwCol = database.collections.get<BodyWeightLog>('body_weight_logs');
-      const today = toISODate(new Date());
-      await database.write(async () => {
-        await bwCol.create((r) => {
-          r.userId = user.id;
-          r.weight = w;
-          r.unit = 'kg';
-          r.loggedAt = Date.now();
-          r.date = today;
-          r.notes = null;
-          r.isDeleted = false;
-          r.remoteId = null;
-          r.syncedAt = null;
-        });
-      });
-      setLoggingWeight(false);
-      setWeightInput('');
-      await load();
-    } finally {
-      setSavingWeight(false);
-    }
-  };
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -347,81 +521,16 @@ export default function ProgressTab() {
           )}
 
           {/* Body weight */}
-          <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing[3] }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
-                  Body Weight
-                </Text>
-                {data.weightEntries.length > 0 && (
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
-                    {data.weightEntries[data.weightEntries.length - 1].weight} {data.weightEntries[data.weightEntries.length - 1].unit} · {formatDate(data.weightEntries[data.weightEntries.length - 1].loggedAt)}
-                  </Text>
-                )}
-              </View>
-              {loggingWeight ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
-                  <TextInput
-                    value={weightInput}
-                    onChangeText={setWeightInput}
-                    placeholder="kg"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="decimal-pad"
-                    autoFocus
-                    style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2], width: 72, textAlign: 'center' }}
-                  />
-                  {savingWeight ? (
-                    <ActivityIndicator size="small" color={colors.text} />
-                  ) : (
-                    <>
-                      <Pressable onPress={() => setLoggingWeight(false)} hitSlop={8}>
-                        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
-                      </Pressable>
-                      <Pressable onPress={handleLogWeight} hitSlop={8} style={{ marginLeft: spacing[3] }}>
-                        <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Save</Text>
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => setLoggingWeight(true)}
-                  style={{ backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}
-                >
-                  <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>+ Log</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {data.weightEntries.length > 1 && (() => {
-              const weights = data.weightEntries.map((e) => e.weight);
-              const minW = Math.min(...weights);
-              const maxW = Math.max(...weights);
-              const range = maxW - minW || 1;
-              const BAR_MAX = 48;
-              return (
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}>
-                  {data.weightEntries.map((e, i) => {
-                    const h = Math.max(((e.weight - minW) / range) * BAR_MAX, 4);
-                    const isLast = i === data.weightEntries.length - 1;
-                    return (
-                      <View key={e.loggedAt} style={{ flex: 1, alignItems: 'center' }}>
-                        <View style={{ height: BAR_MAX, justifyContent: 'flex-end' }}>
-                          <View style={{ height: h, width: 12, backgroundColor: isLast ? colors.text : colors.textMuted, borderRadius: 2, opacity: isLast ? 1 : 0.5 }} />
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-            })()}
-
-            {data.weightEntries.length === 0 && (
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center', paddingVertical: spacing[2] }}>
-                Log your first weigh-in to start tracking
-              </Text>
-            )}
-          </View>
+          <BodyWeightCard
+            entries={data.weightEntries}
+            userId={user!.id}
+            onSaved={load}
+            colors={colors}
+            fontSize={fontSize}
+            fontWeight={fontWeight}
+            spacing={spacing}
+            radius={radius}
+          />
 
           {/* PRs section */}
           {data.prs.length === 0 ? (

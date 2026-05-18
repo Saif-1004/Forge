@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   ScrollView,
-  FlatList,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -156,7 +155,6 @@ export default function LogFoodScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FoodResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedFood, setSelectedFood] = useState<{ food: FoodResult; servingG: string } | null>(null);
   const [formInitial, setFormInitial] = useState<Parameters<typeof EntryForm>[0]['initial']>(undefined);
 
   // Scan mode
@@ -224,7 +222,6 @@ export default function LogFoodScreen() {
       carbs: String(m.carbs),
       fat: String(m.fat),
     });
-    setSelectedFood({ food, servingG: String(g) });
     setSearchResults([]);
     setSearchQuery('');
   };

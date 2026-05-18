@@ -149,7 +149,7 @@ export default function HomeTab() {
     } finally {
       setLoading(false);
     }
-  }, [user, days, todayStr]);
+  }, [user, days, today, todayStr]);
 
   useEffect(() => { load(); }, [load]);
 

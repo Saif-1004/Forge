@@ -75,7 +75,7 @@ export default function RootLayout() {
       appStateSub.remove();
       notifSub.remove();
     };
-  }, [setSession]);
+  }, [setSession, loadSettings]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
