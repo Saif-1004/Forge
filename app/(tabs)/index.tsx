@@ -10,6 +10,9 @@ import { database } from '@/lib/watermelon/database';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import { getOverloadSuggestions, type OverloadSuggestion } from '@/lib/pr/progressiveOverload';
 import type { WorkoutSession, SessionExercise, Exercise, Set as SetModel, FoodLog } from '@/lib/watermelon/models';
+import { CoachAvatar } from '@/components/CoachAvatar';
+import { supabase } from '@/lib/supabase/client';
+import { suggestExercises, exerciseNamesByIds } from '@/lib/workout/planSuggestions';
 
 function toISODate(d: Date): string {
   const y = d.getFullYear();
@@ -68,6 +71,7 @@ export default function HomeTab() {
   const [loading, setLoading] = useState(true);
   const [nutritionToday, setNutritionToday] = useState<{ calories: number; protein: number; carbs: number; fat: number } | null>(null);
   const [overloadSuggestions, setOverloadSuggestions] = useState<OverloadSuggestion[]>([]);
+  const [upcomingPlan, setUpcomingPlan] = useState<{ label: string; date: string; muscles: string[]; exercises: string[] } | null>(null);
 
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => toISODate(today), [today]);
@@ -175,6 +179,45 @@ export default function HomeTab() {
       .catch(() => {});
   }, [user, todayStr]));
 
+  useFocusEffect(useCallback(() => {
+    if (!user) return;
+    const checkDates: string[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+      checkDates.push(toISODate(d));
+    }
+    (async () => {
+      try {
+        const { data: rows } = await supabase
+          .from('planned_workouts')
+          .select('date, muscle_groups, exercise_ids')
+          .eq('user_id', user.id)
+          .gte('date', checkDates[0])
+          .lte('date', checkDates[checkDates.length - 1])
+          .order('date', { ascending: true })
+          .limit(1);
+        const row = rows?.[0];
+        if (!row) { setUpcomingPlan(null); return; }
+        const muscles: string[] = (row as any).muscle_groups ?? [];
+        const savedIds: string[] = (row as any).exercise_ids ?? [];
+        const d = new Date(row.date + 'T00:00:00');
+        const diffDays = Math.round((d.getTime() - new Date(todayStr + 'T00:00:00').getTime()) / 86400000);
+        const label = diffDays === 0 ? "Today's Plan" : diffDays === 1 ? "Tomorrow's Plan" : d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+        let exerciseNames: string[];
+        if (savedIds.length > 0) {
+          const nameMap = await exerciseNamesByIds(savedIds).catch(() => ({} as Record<string, string>));
+          exerciseNames = savedIds.map(id => nameMap[id]).filter((n): n is string => !!n);
+        } else {
+          const suggestions = await suggestExercises(muscles).catch(() => []);
+          exerciseNames = suggestions.map(s => s.name);
+        }
+        setUpcomingPlan({ label, date: row.date, muscles, exercises: exerciseNames });
+      } catch {
+        setUpcomingPlan(null);
+      }
+    })();
+  }, [user, today, todayStr]));
+
   const name = displayName ?? user?.email?.split('@')[0] ?? '';
 
   return (
@@ -279,6 +322,36 @@ export default function HomeTab() {
               </Text>
             </Pressable>
           </View>
+
+          {/* Upcoming plan */}
+          {upcomingPlan && (
+            <Pressable
+              onPress={() => router.push({ pathname: '/workout/planned', params: { date: upcomingPlan.date } })}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4], opacity: pressed ? 0.7 : 1, borderLeftWidth: 3, borderLeftColor: colors.warning },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing[2] }}>
+                <Text style={{ color: colors.warning, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.6, flex: 1 }}>
+                  {upcomingPlan.label.toUpperCase()}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Start Workout →</Text>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginBottom: upcomingPlan.exercises.length > 0 ? spacing[3] : 0 }}>
+                {upcomingPlan.muscles.map((m) => (
+                  <View key={m} style={{ backgroundColor: colors.warning + '22', borderRadius: radius.sm, paddingHorizontal: spacing[2], paddingVertical: 2 }}>
+                    <Text style={{ color: colors.warning, fontSize: fontSize.xs, fontWeight: fontWeight.semibold }}>{m}</Text>
+                  </View>
+                ))}
+              </View>
+              {upcomingPlan.exercises.length > 0 && (
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }} numberOfLines={2}>
+                  {upcomingPlan.exercises.slice(0, 5).join(' · ')}
+                </Text>
+              )}
+            </Pressable>
+          )}
 
           {/* Last workout */}
           {data?.lastWorkout ? (
@@ -414,7 +487,7 @@ export default function HomeTab() {
             ]}
           >
             <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', marginRight: spacing[4] }}>
-              <Text style={{ fontSize: 22 }}>🤖</Text>
+              <CoachAvatar size={26} />
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: 2 }}>

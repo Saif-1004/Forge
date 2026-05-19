@@ -41,7 +41,7 @@ yarn-error.*
 /ios
 /android
 
-.env.local
-
 # Website lives in its own repo
 website/
+
+.env.local

@@ -12,13 +12,15 @@ import {
   Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { scheduleWorkoutReminder, cancelWorkoutReminder, requestNotificationPermissions } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase/client';
-import { Eyebrow } from '@/components/ui';
+import { database } from '@/lib/watermelon/database';
+import type { BodyWeightLog } from '@/lib/watermelon/models';
 
 const REST_PRESETS = [
   { label: '30s', seconds: 30 },
@@ -29,11 +31,44 @@ const REST_PRESETS = [
   { label: '5m', seconds: 300 },
 ];
 
+const GOAL_LABELS: Record<string, string> = {
+  muscle: 'Build muscle',
+  fat_loss: 'Lose fat',
+  endurance: 'Endurance',
+  athletic: 'Athletic',
+  consistency: 'Consistency',
+};
+
+function kgToDisplay(kg: number, isImperial: boolean): string {
+  return isImperial ? String(Math.round((kg / 0.453592) * 10) / 10) : String(kg);
+}
+
+function displayToKg(val: string, isImperial: boolean): number {
+  const n = parseFloat(val);
+  return isImperial ? Math.round(n * 0.453592 * 10) / 10 : n;
+}
+
+function toISODate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
 export default function ProfileTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, displayName, unitPreference, updateDisplayName, updateUnitPreference, signOut } = useAuthStore();
-  const { defaultRestSeconds, setRestSeconds, calorieGoal, proteinGoal, carbsGoal, fatGoal, setGoals, notificationsEnabled, notificationHour, notificationMinute, setNotificationTime, themeMode, setThemeMode } = useSettingsStore();
+  const {
+    user, displayName, unitPreference,
+    primaryGoal, trainingDaysPerWeek, bodyWeightKg,
+    updateDisplayName, updateUnitPreference, updateGoals, signOut,
+  } = useAuthStore();
+  const {
+    defaultRestSeconds, setRestSeconds,
+    calorieGoal, proteinGoal, carbsGoal, fatGoal, setGoals,
+    notificationsEnabled, notificationHour, notificationMinute, setNotificationTime,
+    themeMode, setThemeMode,
+  } = useSettingsStore();
+
+  const isImperial = unitPreference === 'lbs';
+  const weightUnit = isImperial ? 'lbs' : 'kg';
 
   const [nameInput, setNameInput] = useState(displayName ?? '');
   const [editingName, setEditingName] = useState(false);
@@ -46,7 +81,28 @@ export default function ProfileTab() {
   const [carbsInput, setCarbsInput] = useState(String(carbsGoal));
   const [fatInput, setFatInput] = useState(String(fatGoal));
 
-  const handleOpenGoals = () => {
+  const [editingBodyWeight, setEditingBodyWeight] = useState(false);
+  const [bodyWeightInput, setBodyWeightInput] = useState(
+    bodyWeightKg != null ? kgToDisplay(bodyWeightKg, isImperial) : '',
+  );
+  const [savingBodyWeight, setSavingBodyWeight] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const handleSaveName = async () => {
+    setSavingName(true);
+    try { await updateDisplayName(nameInput); } finally {
+      setSavingName(false);
+      setEditingName(false);
+    }
+  };
+
+  const handleUnitToggle = async (pref: 'kg' | 'lbs') => {
+    if (pref === unitPreference || togglingUnit) return;
+    setTogglingUnit(true);
+    try { await updateUnitPreference(pref); } finally { setTogglingUnit(false); }
+  };
+
+  const handleOpenNutrition = () => {
     setCalInput(String(calorieGoal));
     setProteinInput(String(proteinGoal));
     setCarbsInput(String(carbsGoal));
@@ -54,7 +110,15 @@ export default function ProfileTab() {
     setEditingGoals(true);
   };
 
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const handleSaveNutrition = async () => {
+    await setGoals({
+      calorieGoal: parseInt(calInput, 10) || calorieGoal,
+      proteinGoal: parseInt(proteinInput, 10) || proteinGoal,
+      carbsGoal: parseInt(carbsInput, 10) || carbsGoal,
+      fatGoal: parseInt(fatInput, 10) || fatGoal,
+    });
+    setEditingGoals(false);
+  };
 
   const handleToggleNotifications = async (val: boolean) => {
     if (val) {
@@ -71,89 +135,84 @@ export default function ProfileTab() {
     }
   };
 
-  const handleSaveGoals = async () => {
-    await setGoals({
-      calorieGoal: parseInt(calInput, 10) || calorieGoal,
-      proteinGoal: parseInt(proteinInput, 10) || proteinGoal,
-      carbsGoal: parseInt(carbsInput, 10) || carbsGoal,
-      fatGoal: parseInt(fatInput, 10) || fatGoal,
-    });
-    setEditingGoals(false);
-  };
-
-  const handleSaveName = async () => {
-    setSavingName(true);
-    try {
-      await updateDisplayName(nameInput);
-    } finally {
-      setSavingName(false);
-      setEditingName(false);
+  const handleSaveBodyWeight = async () => {
+    if (!user) return;
+    const n = parseFloat(bodyWeightInput);
+    if (isNaN(n) || n < 20 || n > (isImperial ? 660 : 300)) {
+      Alert.alert('Invalid weight', `Enter a weight between ${isImperial ? '44–660 lbs' : '20–300 kg'}`);
+      return;
     }
-  };
-
-  const handleCancelName = () => {
-    setNameInput(displayName ?? '');
-    setEditingName(false);
-  };
-
-  const handleUnitToggle = async (pref: 'kg' | 'lbs') => {
-    if (pref === unitPreference || togglingUnit) return;
-    setTogglingUnit(true);
+    setSavingBodyWeight(true);
     try {
-      await updateUnitPreference(pref);
+      const kg = displayToKg(bodyWeightInput, isImperial);
+      const col = database.collections.get<BodyWeightLog>('body_weight_logs');
+      await database.write(async () => {
+        await col.create(r => {
+          r.userId = user.id;
+          r.weight = n;
+          r.unit = weightUnit;
+          r.loggedAt = Date.now();
+          r.date = toISODate(new Date());
+          r.isDeleted = false;
+          r.remoteId = null;
+          r.syncedAt = null;
+        });
+      });
+      await updateGoals({ bodyWeightKg: kg });
     } finally {
-      setTogglingUnit(false);
+      setSavingBodyWeight(false);
+      setEditingBodyWeight(false);
     }
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: signOut },
     ]);
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete account',
-      'This will permanently delete your account and all data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!user) return;
-            try {
-              await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', user.id);
-            } catch {}
-            signOut();
-          },
+    Alert.alert('Delete account', 'This will permanently delete your account and all data. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          if (!user) return;
+          try { await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', user.id); } catch {}
+          signOut();
         },
-      ],
-    );
+      },
+    ]);
   };
+
+  const goalSummary = [
+    primaryGoal ? GOAL_LABELS[primaryGoal] : null,
+    trainingDaysPerWeek ? `${trainingDaysPerWeek}d/wk` : null,
+  ].filter(Boolean).join(' · ') || 'Not set';
+
+  const s = spacing;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingHorizontal: spacing[5], paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ paddingTop: insets.top + s[5], paddingBottom: insets.bottom + 40 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, marginBottom: spacing[6] }}>
+      <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, paddingHorizontal: s[5], marginBottom: s[6] }}>
         Profile
       </Text>
 
-      {/* Display name */}
-      <Eyebrow>Display Name</Eyebrow>
-      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[4] }]}>
+      {/* ── Account ── */}
+      <SectionHeader label="ACCOUNT" colors={colors} fontSize={fontSize} spacing={s} />
+      <Card colors={colors} radius={radius} spacing={s}>
         {editingName ? (
-          <>
+          <Row>
             <TextInput
               value={nameInput}
               onChangeText={setNameInput}
               autoFocus
-              style={[styles.nameInput, { color: colors.text, fontSize: fontSize.base, flex: 1 }]}
+              style={{ color: colors.text, fontSize: fontSize.base, flex: 1, padding: 0 }}
               placeholder="Your name"
               placeholderTextColor={colors.textMuted}
               returnKeyType="done"
@@ -162,260 +221,302 @@ export default function ProfileTab() {
             {savingName ? (
               <ActivityIndicator size="small" color={colors.text} />
             ) : (
-              <View style={styles.nameActions}>
-                <Pressable onPress={handleCancelName} hitSlop={8}>
+              <View style={styles.row}>
+                <Pressable onPress={() => { setNameInput(displayName ?? ''); setEditingName(false); }} hitSlop={8}>
                   <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={handleSaveName} hitSlop={8} style={{ marginLeft: spacing[4] }}>
+                <Pressable onPress={handleSaveName} hitSlop={8} style={{ marginLeft: s[4] }}>
                   <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Save</Text>
                 </Pressable>
               </View>
             )}
-          </>
+          </Row>
         ) : (
-          <>
+          <Pressable onPress={() => { setNameInput(displayName ?? ''); setEditingName(true); }} style={styles.pressableRow}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, width: 60 }}>Name</Text>
             <Text style={{ color: displayName ? colors.text : colors.textMuted, fontSize: fontSize.base, flex: 1 }}>
-              {displayName ?? 'Add your name'}
+              {displayName ?? 'Add name'}
             </Text>
-            <Pressable onPress={() => setEditingName(true)} hitSlop={8}>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Edit</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Edit</Text>
+          </Pressable>
+        )}
+        <Divider colors={colors} spacing={s} />
+        <View style={styles.pressableRow}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, width: 60 }}>Email</Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.base, flex: 1 }} numberOfLines={1}>
+            {user?.email}
+          </Text>
+        </View>
+      </Card>
+
+      {/* ── Fitness ── */}
+      <SectionHeader label="FITNESS" colors={colors} fontSize={fontSize} spacing={s} />
+      <Card colors={colors} radius={radius} spacing={s}>
+        <Pressable onPress={() => router.push('/goals')} style={styles.pressableRow}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>My Goals</Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginRight: s[2] }} numberOfLines={1}>
+            {goalSummary}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>›</Text>
+        </Pressable>
+        <Divider colors={colors} spacing={s} />
+        {editingBodyWeight ? (
+          <Row>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, width: 60 }}>Weight</Text>
+            <TextInput
+              value={bodyWeightInput}
+              onChangeText={setBodyWeightInput}
+              keyboardType="decimal-pad"
+              autoFocus
+              style={{ color: colors.text, fontSize: fontSize.base, flex: 1, padding: 0 }}
+              placeholder={`e.g. 75 ${weightUnit}`}
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveBodyWeight}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginRight: s[3] }}>{weightUnit}</Text>
+            {savingBodyWeight ? (
+              <ActivityIndicator size="small" color={colors.text} />
+            ) : (
+              <View style={styles.row}>
+                <Pressable onPress={() => setEditingBodyWeight(false)} hitSlop={8}>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={handleSaveBodyWeight} hitSlop={8} style={{ marginLeft: s[4] }}>
+                  <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Log</Text>
+                </Pressable>
+              </View>
+            )}
+          </Row>
+        ) : (
+          <Pressable
+            onPress={() => {
+              setBodyWeightInput(bodyWeightKg != null ? kgToDisplay(bodyWeightKg, isImperial) : '');
+              setEditingBodyWeight(true);
+            }}
+            style={styles.pressableRow}
+          >
+            <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Body Weight</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginRight: s[2] }}>
+              {bodyWeightKg != null ? `${kgToDisplay(bodyWeightKg, isImperial)} ${weightUnit}` : 'Log weight'}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>›</Text>
+          </Pressable>
+        )}
+      </Card>
+
+      {/* ── Settings ── */}
+      <SectionHeader label="SETTINGS" colors={colors} fontSize={fontSize} spacing={s} />
+      <Card colors={colors} radius={radius} spacing={s}>
+
+        {/* Weight unit */}
+        <View style={[styles.pressableRow, { paddingVertical: s[3] }]}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Weight Unit</Text>
+          <View style={[styles.row, { backgroundColor: colors.background, borderRadius: radius.md, padding: 3, gap: 3 }]}>
+            {(['kg', 'lbs'] as const).map((opt) => {
+              const active = unitPreference === opt;
+              return (
+                <Pressable
+                  key={opt}
+                  onPress={() => handleUnitToggle(opt)}
+                  disabled={togglingUnit}
+                  style={{ backgroundColor: active ? colors.text : 'transparent', borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 10 }}
+                >
+                  <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>
+                    {opt.toUpperCase()}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {togglingUnit && <ActivityIndicator size="small" color={colors.textMuted} style={{ marginLeft: s[2] }} />}
+        </View>
+        <Divider colors={colors} spacing={s} />
+
+        {/* Rest timer */}
+        <View style={{ paddingHorizontal: s[4], paddingVertical: s[3] }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, marginBottom: s[2] }}>Default Rest Timer</Text>
+          <View style={[styles.row, { flexWrap: 'wrap', gap: s[2] }]}>
+            {REST_PRESETS.map((p) => {
+              const active = defaultRestSeconds === p.seconds;
+              return (
+                <Pressable
+                  key={p.seconds}
+                  onPress={() => setRestSeconds(p.seconds)}
+                  style={{ backgroundColor: active ? colors.text : colors.background, borderRadius: radius.md, paddingVertical: s[2], paddingHorizontal: s[3] }}
+                >
+                  <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>
+                    {p.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        <Divider colors={colors} spacing={s} />
+
+        {/* Reminders */}
+        <View style={[styles.pressableRow, { paddingVertical: s[3] }]}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Workout Reminders</Text>
+          <Switch
+            value={notificationsEnabled}
+            onValueChange={handleToggleNotifications}
+            trackColor={{ false: colors.border, true: colors.text }}
+            thumbColor={colors.background}
+          />
+        </View>
+        {notificationsEnabled && (
+          <>
+            <Divider colors={colors} spacing={s} />
+            <Pressable onPress={() => setShowTimePicker(true)} style={styles.pressableRow}>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, flex: 1 }}>Reminder time</Text>
+              <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
+                {String(notificationHour).padStart(2, '0')}:{String(notificationMinute).padStart(2, '0')}
+              </Text>
             </Pressable>
           </>
         )}
-      </View>
+        {showTimePicker && (
+          <DateTimePicker
+            value={new Date(2000, 0, 1, notificationHour, notificationMinute)}
+            mode="time"
+            is24Hour
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={async (_, d) => {
+              setShowTimePicker(false);
+              if (!d) return;
+              const h = d.getHours();
+              const m = d.getMinutes();
+              await setNotificationTime(true, h, m);
+              await scheduleWorkoutReminder(h, m);
+            }}
+          />
+        )}
+        <Divider colors={colors} spacing={s} />
 
-      {/* Email */}
-      <Eyebrow>Email</Eyebrow>
-      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[4] }]}>
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>{user?.email}</Text>
-      </View>
-
-      {/* Unit preference */}
-      <Eyebrow>Weight Unit</Eyebrow>
-      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[2], paddingVertical: spacing[2], marginBottom: spacing[6], gap: spacing[2] }]}>
-        {(['kg', 'lbs'] as const).map((opt) => {
-          const active = unitPreference === opt;
-          return (
-            <Pressable
-              key={opt}
-              onPress={() => handleUnitToggle(opt)}
-              disabled={togglingUnit}
-              style={[
-                styles.unitBtn,
-                {
-                  flex: 1,
-                  backgroundColor: active ? colors.text : 'transparent',
-                  borderRadius: radius.md,
-                  paddingVertical: spacing[2],
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: active ? colors.background : colors.textMuted,
-                  fontSize: fontSize.sm,
-                  fontWeight: active ? fontWeight.semibold : fontWeight.normal,
-                  textAlign: 'center',
-                }}
-              >
-                {opt.toUpperCase()}
-              </Text>
-            </Pressable>
-          );
-        })}
-        {togglingUnit && <ActivityIndicator size="small" color={colors.textMuted} />}
-      </View>
-
-      {/* Rest timer default */}
-      <Eyebrow>Default Rest Timer</Eyebrow>
-      <View style={[styles.row, { flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[6] }]}>
-        {REST_PRESETS.map((p) => {
-          const active = defaultRestSeconds === p.seconds;
-          return (
-            <Pressable
-              key={p.seconds}
-              onPress={() => setRestSeconds(p.seconds)}
-              style={[
-                styles.unitBtn,
-                {
-                  backgroundColor: active ? colors.text : colors.surface,
-                  borderRadius: radius.md,
-                  paddingVertical: spacing[2],
-                  paddingHorizontal: spacing[4],
-                },
-              ]}
-            >
-              <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>
-                {p.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Workout reminders */}
-      <Eyebrow>Workout Reminders</Eyebrow>
-      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[2] }]}>
-        <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Daily Reminder</Text>
-        <Switch
-          value={notificationsEnabled}
-          onValueChange={handleToggleNotifications}
-          trackColor={{ false: colors.border, true: colors.text }}
-          thumbColor={colors.background}
-        />
-      </View>
-      {notificationsEnabled && (
-        <Pressable
-          onPress={() => setShowTimePicker(true)}
-          style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[6] }]}
-        >
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, flex: 1 }}>Reminder time</Text>
-          <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
-            {String(notificationHour).padStart(2, '0')}:{String(notificationMinute).padStart(2, '0')}
-          </Text>
-        </Pressable>
-      )}
-      {!notificationsEnabled && <View style={{ marginBottom: spacing[6] }} />}
-      {showTimePicker && (
-        <DateTimePicker
-          value={new Date(2000, 0, 1, notificationHour, notificationMinute)}
-          mode="time"
-          is24Hour
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={async (_, d) => {
-            setShowTimePicker(false);
-            if (!d) return;
-            const h = d.getHours();
-            const m = d.getMinutes();
-            await setNotificationTime(true, h, m);
-            await scheduleWorkoutReminder(h, m);
-          }}
-        />
-      )}
-
-      {/* Nutrition goals */}
-      <Eyebrow>Nutrition Goals</Eyebrow>
-      {editingGoals ? (
-        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing[4], marginBottom: spacing[6] }}>
-          <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[1] }}>Calories (kcal)</Text>
+        {/* Nutrition goals */}
+        {editingGoals ? (
+          <View style={{ paddingHorizontal: s[4], paddingVertical: s[3] }}>
+            <Text style={{ color: colors.text, fontSize: fontSize.base, marginBottom: s[3] }}>Nutrition Goals</Text>
+            <View style={{ marginBottom: s[3] }}>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: s[1] }}>Calories (kcal)</Text>
               <TextInput
                 value={calInput}
                 onChangeText={setCalInput}
                 keyboardType="number-pad"
-                style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}
+                style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: s[3], paddingVertical: s[2] }}
               />
             </View>
+            <View style={[styles.row, { gap: s[3], marginBottom: s[3] }]}>
+              {[
+                { label: 'Protein (g)', value: proteinInput, set: setProteinInput },
+                { label: 'Carbs (g)', value: carbsInput, set: setCarbsInput },
+                { label: 'Fat (g)', value: fatInput, set: setFatInput },
+              ].map(({ label, value, set }) => (
+                <View key={label} style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: s[1] }}>{label}</Text>
+                  <TextInput
+                    value={value}
+                    onChangeText={set}
+                    keyboardType="number-pad"
+                    style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: s[3], paddingVertical: s[2] }}
+                  />
+                </View>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: s[4] }}>
+              <Pressable onPress={() => setEditingGoals(false)} hitSlop={8}>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleSaveNutrition} hitSlop={8}>
+                <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Save</Text>
+              </Pressable>
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] }}>
-            {[
-              { label: 'Protein (g)', value: proteinInput, set: setProteinInput },
-              { label: 'Carbs (g)', value: carbsInput, set: setCarbsInput },
-              { label: 'Fat (g)', value: fatInput, set: setFatInput },
-            ].map(({ label, value, set }) => (
-              <View key={label} style={{ flex: 1 }}>
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[1] }}>{label}</Text>
-                <TextInput
-                  value={value}
-                  onChangeText={set}
-                  keyboardType="number-pad"
-                  style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] }}
-                />
-              </View>
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: spacing[4] }}>
-            <Pressable onPress={() => setEditingGoals(false)} hitSlop={8}>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
-            </Pressable>
-            <Pressable onPress={handleSaveGoals} hitSlop={8}>
-              <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Save</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : (
-        <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[3], marginBottom: spacing[6] }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontSize: fontSize.base }}>{calorieGoal} kcal</Text>
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
-              P {proteinGoal}g · C {carbsGoal}g · F {fatGoal}g
-            </Text>
-          </View>
-          <Pressable onPress={handleOpenGoals} hitSlop={8}>
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Edit</Text>
+        ) : (
+          <Pressable onPress={handleOpenNutrition} style={styles.pressableRow}>
+            <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Nutrition Goals</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginRight: s[2] }}>{calorieGoal} kcal</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.base }}>›</Text>
           </Pressable>
+        )}
+        <Divider colors={colors} spacing={s} />
+
+        {/* Appearance */}
+        <View style={[styles.pressableRow, { paddingVertical: s[3] }]}>
+          <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>Appearance</Text>
+          <View style={[styles.row, { backgroundColor: colors.background, borderRadius: radius.md, padding: 3, gap: 3 }]}>
+            {(['system', 'light', 'dark'] as const).map((mode) => {
+              const active = themeMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  onPress={() => setThemeMode(mode)}
+                  style={{ backgroundColor: active ? colors.text : 'transparent', borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8 }}
+                >
+                  <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      )}
+      </Card>
 
-      {/* Appearance */}
-      <Eyebrow>Appearance</Eyebrow>
-      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[2], paddingVertical: spacing[2], marginBottom: spacing[6], gap: spacing[2] }]}>
-        {(['system', 'light', 'dark'] as const).map((mode) => {
-          const active = themeMode === mode;
-          const label = mode.charAt(0).toUpperCase() + mode.slice(1);
-          return (
-            <Pressable
-              key={mode}
-              onPress={() => setThemeMode(mode)}
-              style={[
-                styles.unitBtn,
-                {
-                  flex: 1,
-                  backgroundColor: active ? colors.text : 'transparent',
-                  borderRadius: radius.md,
-                  paddingVertical: spacing[2],
-                },
-              ]}
-            >
-              <Text style={{
-                color: active ? colors.background : colors.textMuted,
-                fontSize: fontSize.sm,
-                fontWeight: active ? fontWeight.semibold : fontWeight.normal,
-                textAlign: 'center',
-              }}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
+      {/* ── Danger zone ── */}
+      <View style={{ paddingHorizontal: s[5], marginBottom: s[3] }}>
+        <Pressable
+          onPress={handleSignOut}
+          style={({ pressed }) => ({ backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.7 : 1 })}
+        >
+          <Text style={{ color: colors.text, fontSize: fontSize.base, textAlign: 'center' }}>Sign out</Text>
+        </Pressable>
       </View>
-
-      {/* Danger zone */}
-      <DangerButton label="Sign out" onPress={handleSignOut} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} />
-      <View style={{ height: spacing[3] }} />
-      <DangerButton label="Delete account" onPress={handleDeleteAccount} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} destructive />
+      <View style={{ paddingHorizontal: s[5] }}>
+        <Pressable
+          onPress={handleDeleteAccount}
+          style={({ pressed }) => ({ backgroundColor: colors.error + '18', borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.7 : 1 })}
+        >
+          <Text style={{ color: colors.error, fontSize: fontSize.base, textAlign: 'center' }}>Delete account</Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
 
-function DangerButton({ label, onPress, colors, fontSize, fontWeight, spacing, radius, destructive }: {
-  label: string; onPress: () => void; colors: any; fontSize: any; fontWeight: any; spacing: any; radius: any; destructive?: boolean;
-}) {
+function SectionHeader({ label, colors, fontSize, spacing }: { label: string; colors: any; fontSize: any; spacing: any }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.dangerBtn,
-        {
-          backgroundColor: destructive ? colors.error + '18' : colors.surface,
-          borderRadius: radius.lg,
-          paddingVertical: spacing[4],
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
-    >
-      <Text style={{ color: destructive ? colors.error : colors.text, fontSize: fontSize.base, fontWeight: fontWeight.medium, textAlign: 'center' }}>
-        {label}
-      </Text>
-    </Pressable>
+    <Text style={{
+      color: colors.textMuted,
+      fontSize: fontSize.xs,
+      fontWeight: '600',
+      letterSpacing: 0.8,
+      paddingHorizontal: spacing[5] + 4,
+      marginBottom: spacing[2],
+    }}>
+      {label}
+    </Text>
   );
+}
+
+function Card({ children, colors, radius, spacing }: { children: React.ReactNode; colors: any; radius: any; spacing: any }) {
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, marginHorizontal: spacing[5], marginBottom: spacing[5], overflow: 'hidden' }}>
+      {children}
+    </View>
+  );
+}
+
+function Row({ children }: { children: React.ReactNode }) {
+  return <View style={[styles.row, { paddingHorizontal: 16, paddingVertical: 12 }]}>{children}</View>;
+}
+
+function Divider({ colors, spacing }: { colors: any; spacing: any }) {
+  return <View style={{ height: 1, backgroundColor: colors.border, marginLeft: spacing[4] }} />;
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  nameInput: { padding: 0 },
-  nameActions: { flexDirection: 'row', alignItems: 'center' },
-  unitBtn: { alignItems: 'center' },
-  dangerBtn: {},
+  pressableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
 });

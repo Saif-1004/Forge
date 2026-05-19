@@ -339,6 +339,36 @@ export default function WorkoutTab() {
         </Pressable>
       )}
 
+      {/* Quick links: Guide + Programs */}
+      <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[5] }}>
+        <Pressable
+          onPress={() => router.push('/guide')}
+          style={({ pressed }) => ({
+            flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg,
+            padding: spacing[4], opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 22, marginBottom: spacing[2] }}>📖</Text>
+          <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, marginBottom: 2 }}>
+            Exercise Guide
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Form cues &amp; muscle maps</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/programs')}
+          style={({ pressed }) => ({
+            flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg,
+            padding: spacing[4], opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 22, marginBottom: spacing[2] }}>🗓</Text>
+          <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, marginBottom: 2 }}>
+            Programs
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>PPL, 5×5, Upper/Lower +</Text>
+        </Pressable>
+      </View>
+
       {/* Templates section */}
       <View style={[styles.sectionHeader, { marginBottom: spacing[3] }]}>
         <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold }}>Templates</Text>

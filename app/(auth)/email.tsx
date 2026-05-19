@@ -45,7 +45,7 @@ export default function EmailScreen() {
           What&apos;s your email?
         </Text>
         <Text style={{ color: colors.textMuted, fontSize: fontSize.base, marginBottom: spacing[8], lineHeight: 22 }}>
-          We&apos;ll send a 6-digit code to verify it&apos;s you. No password needed.
+          We&apos;ll send a 6-digit code to sign you in. No password — just your email. Already have an account? Enter the same email to get back in.
         </Text>
 
         <Controller

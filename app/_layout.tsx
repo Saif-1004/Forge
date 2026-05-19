@@ -22,6 +22,8 @@ Sentry.init({
   enabled: !__DEV__,
   sendDefaultPii: false,
   enableLogs: true,
+  enableNativeCrashHandling: true,
+  enableAutoSessionTracking: true,
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1,
   integrations: [Sentry.mobileReplayIntegration()],
@@ -34,6 +36,7 @@ Sentry.init({
     return event;
   },
 });
+
 
 const queryClient = new QueryClient({
   defaultOptions: {

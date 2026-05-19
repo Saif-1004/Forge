@@ -21,7 +21,11 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { MUSCLE_GROUP_LABELS } from '@/data/exercises';
 import { Eyebrow } from '@/components/ui';
 
+const MAX_ELAPSED_MS = 6 * 60 * 60 * 1000; // 6 hours cap for display
+const MAX_REST_SECONDS = 600; // 10 min cap
+
 function formatDuration(ms: number): string {
+  if (ms >= MAX_ELAPSED_MS) return '6h+';
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
@@ -359,8 +363,9 @@ export default function ActiveWorkoutScreen() {
 
   const startRestTimer = useCallback((seconds: number) => {
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-    setRestTotal(seconds);
-    setRestLeft(seconds);
+    const capped = Math.min(seconds, MAX_REST_SECONDS);
+    setRestTotal(capped);
+    setRestLeft(capped);
     restIntervalRef.current = setInterval(() => {
       setRestLeft((prev) => {
         if (prev === null || prev <= 1) {
@@ -383,8 +388,9 @@ export default function ActiveWorkoutScreen() {
   const addRestTime = useCallback((extra: number) => {
     setRestLeft((prev) => {
       if (prev === null) return null;
-      const next = prev + extra;
-      setRestTotal((t) => t + extra);
+      const next = Math.min(prev + extra, MAX_REST_SECONDS);
+      const added = next - prev;
+      if (added > 0) setRestTotal((t) => t + added);
       return next;
     });
   }, []);

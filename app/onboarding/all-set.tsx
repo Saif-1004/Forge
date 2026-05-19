@@ -9,6 +9,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/Button';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { computeNutritionTargets } from '@/lib/nutrition/tdee';
 
 export default function AllSetScreen() {
@@ -16,6 +17,7 @@ export default function AllSetScreen() {
   const insets = useSafeAreaInsets();
   const { data, reset } = useOnboardingStore();
   const { user, setOnboardingCompleted } = useAuthStore();
+  const { setGoals } = useSettingsStore();
   const lottieRef = useRef<LottieView>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,15 @@ export default function AllSetScreen() {
         });
 
       if (upsertError) throw upsertError;
+
+      if (targets) {
+        await setGoals({
+          calorieGoal: targets.calories,
+          proteinGoal: targets.protein,
+          carbsGoal: targets.carbs,
+          fatGoal: targets.fat,
+        });
+      }
 
       reset();
       setOnboardingCompleted(true);

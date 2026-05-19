@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import { CoachAvatar } from '@/components/CoachAvatar';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Q } from '@nozbe/watermelondb';
@@ -52,6 +53,9 @@ interface CoachContext {
   carbsGoal: number;
   fatGoal: number;
 }
+
+const WEEKLY_SUMMARY_PROMPT =
+  'Give me a summary of my training this week: sessions completed, total volume, muscles trained, and any patterns you notice. Then suggest what I should focus on next week.';
 
 const QUICK_PROMPTS = [
   'What should I train today?',
@@ -339,7 +343,9 @@ export default function CoachScreen() {
           <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold, marginLeft: spacing[3] }}>AI Coach</Text>
         </View>
         <View style={[styles.center, { paddingHorizontal: spacing[6] }]}>
-          <Text style={{ fontSize: 48, marginBottom: spacing[5] }}>🤖</Text>
+          <View style={{ marginBottom: spacing[5] }}>
+            <CoachAvatar size={80} />
+          </View>
           <Text style={{ color: colors.text, fontSize: fontSize.xl, fontWeight: fontWeight.bold, textAlign: 'center', marginBottom: spacing[3] }}>
             Your Personal AI Coach
           </Text>
@@ -403,13 +409,36 @@ export default function CoachScreen() {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={() => (
           <View style={{ alignItems: 'center', marginTop: spacing[8] }}>
-            <Text style={{ fontSize: 40, marginBottom: spacing[4] }}>🤖</Text>
+            <View style={{ marginBottom: spacing[4] }}>
+              <CoachAvatar size={64} />
+            </View>
             <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, marginBottom: spacing[2], textAlign: 'center' }}>
               Hey{displayName ? ` ${displayName}` : ''}!
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center', marginBottom: spacing[6] }}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center', marginBottom: spacing[4] }}>
               I know your workout history and PRs. Ask me anything.
             </Text>
+            {/* Weekly summary CTA */}
+            <Pressable
+              onPress={() => send(WEEKLY_SUMMARY_PROMPT)}
+              style={({ pressed }) => ({
+                backgroundColor: colors.text,
+                borderRadius: radius.lg,
+                paddingHorizontal: spacing[4],
+                paddingVertical: spacing[3],
+                marginBottom: spacing[4],
+                width: '100%',
+                opacity: pressed ? 0.8 : 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing[2],
+              })}
+            >
+              <Text style={{ fontSize: 16 }}>📊</Text>
+              <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, flex: 1 }}>
+                Get my weekly training summary
+              </Text>
+            </Pressable>
             {QUICK_PROMPTS.map((p) => (
               <Pressable
                 key={p}

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, TextInput, Share, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, TextInput, Share, Dimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Q } from '@nozbe/watermelondb';
@@ -437,6 +437,115 @@ function toISODate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// ─── 1RM Calculator ──────────────────────────────────────────────────────────
+
+// Epley formula: 1RM = weight × (1 + reps/30)
+function epley(weight: number, reps: number): number {
+  if (reps === 1) return weight;
+  return weight * (1 + reps / 30);
+}
+
+// Percentage-based rep estimates from 1RM
+const RM_PERCENTAGES: { reps: number; pct: number }[] = [
+  { reps: 1, pct: 1 }, { reps: 2, pct: 0.97 }, { reps: 3, pct: 0.94 },
+  { reps: 4, pct: 0.91 }, { reps: 5, pct: 0.88 }, { reps: 6, pct: 0.85 },
+  { reps: 8, pct: 0.8 }, { reps: 10, pct: 0.75 }, { reps: 12, pct: 0.7 },
+  { reps: 15, pct: 0.65 },
+];
+
+function OneRMCard({ colors, fontSize, fontWeight, spacing, radius }: {
+  colors: any; fontSize: any; fontWeight: any; spacing: any; radius: any;
+}) {
+  const [weight, setWeight] = useState('');
+  const [reps, setReps] = useState('');
+
+  const w = parseFloat(weight);
+  const r = parseInt(reps, 10);
+  const oneRM = !isNaN(w) && !isNaN(r) && w > 0 && r > 0 && r <= 30 ? epley(w, r) : null;
+
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }}>
+      <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold, marginBottom: spacing[1] }}>
+        1RM Calculator
+      </Text>
+      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[4] }}>
+        Estimate your one-rep max using the Epley formula
+      </Text>
+      <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: oneRM !== null ? spacing[4] : 0 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[1] }}>Weight</Text>
+          <TextInput
+            value={weight}
+            onChangeText={setWeight}
+            placeholder="e.g. 100"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            style={{
+              backgroundColor: colors.background,
+              borderRadius: radius.lg,
+              paddingHorizontal: spacing[3],
+              paddingVertical: spacing[3],
+              color: colors.text,
+              fontSize: fontSize.base,
+            }}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[1] }}>Reps</Text>
+          <TextInput
+            value={reps}
+            onChangeText={setReps}
+            placeholder="e.g. 5"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            style={{
+              backgroundColor: colors.background,
+              borderRadius: radius.lg,
+              paddingHorizontal: spacing[3],
+              paddingVertical: spacing[3],
+              color: colors.text,
+              fontSize: fontSize.base,
+            }}
+          />
+        </View>
+      </View>
+      {oneRM !== null && (
+        <>
+          <View style={{ backgroundColor: colors.background, borderRadius: radius.lg, padding: spacing[4], alignItems: 'center', marginBottom: spacing[4] }}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: 4 }}>Estimated 1RM</Text>
+            <Text style={{ color: colors.text, fontSize: 36, fontWeight: fontWeight.bold }}>
+              {Math.round(oneRM)}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>kg / lbs (same unit as input)</Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }}>
+            {RM_PERCENTAGES.filter(p => p.reps !== r || p.reps === 1).map(p => (
+              <View
+                key={p.reps}
+                style={{
+                  backgroundColor: p.reps === 1 ? colors.text : colors.background,
+                  borderRadius: radius.md,
+                  paddingHorizontal: spacing[3],
+                  paddingVertical: spacing[1],
+                  minWidth: 68,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: p.reps === 1 ? colors.background : colors.textMuted, fontSize: 10 }}>
+                  {p.reps === 1 ? '1RM' : `${p.reps} reps`}
+                </Text>
+                <Text style={{ color: p.reps === 1 ? colors.background : colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>
+                  {Math.round(oneRM * p.pct)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProgressTab() {
@@ -531,6 +640,9 @@ export default function ProgressTab() {
             spacing={spacing}
             radius={radius}
           />
+
+          {/* 1RM Calculator */}
+          <OneRMCard colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} />
 
           {/* PRs section */}
           {data.prs.length === 0 ? (

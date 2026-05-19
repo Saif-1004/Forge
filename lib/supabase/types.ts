@@ -134,6 +134,31 @@ export interface Database {
         };
         Relationships: [];
       };
+      planned_workouts: {
+        Row: {
+          id: string;
+          user_id: string;
+          date: string;
+          muscle_groups: string[];
+          exercise_ids: string[];
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          date: string;
+          muscle_groups?: string[];
+          exercise_ids?: string[];
+          notes?: string | null;
+        };
+        Update: {
+          muscle_groups?: string[];
+          exercise_ids?: string[];
+          notes?: string | null;
+        };
+        Relationships: [];
+      };
       session_exercises: {
         Row: {
           id: string;
