@@ -118,6 +118,10 @@ export default function VerifyScreen() {
             </Pressable>
           )}
         </View>
+
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, textAlign: 'center', marginTop: spacing[4], lineHeight: 18 }}>
+          Can&apos;t find it? Check your spam folder and mark it as not spam.
+        </Text>
       </View>
     </View>
   );

@@ -33,7 +33,7 @@ export default function ProfileTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, displayName, unitPreference, updateDisplayName, updateUnitPreference, signOut } = useAuthStore();
-  const { defaultRestSeconds, setRestSeconds, calorieGoal, proteinGoal, carbsGoal, fatGoal, setGoals, notificationsEnabled, notificationHour, notificationMinute, setNotificationTime } = useSettingsStore();
+  const { defaultRestSeconds, setRestSeconds, calorieGoal, proteinGoal, carbsGoal, fatGoal, setGoals, notificationsEnabled, notificationHour, notificationMinute, setNotificationTime, themeMode, setThemeMode } = useSettingsStore();
 
   const [nameInput, setNameInput] = useState(displayName ?? '');
   const [editingName, setEditingName] = useState(false);
@@ -347,6 +347,39 @@ export default function ProfileTab() {
           </Pressable>
         </View>
       )}
+
+      {/* Appearance */}
+      <Eyebrow>Appearance</Eyebrow>
+      <View style={[styles.row, { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[2], paddingVertical: spacing[2], marginBottom: spacing[6], gap: spacing[2] }]}>
+        {(['system', 'light', 'dark'] as const).map((mode) => {
+          const active = themeMode === mode;
+          const label = mode.charAt(0).toUpperCase() + mode.slice(1);
+          return (
+            <Pressable
+              key={mode}
+              onPress={() => setThemeMode(mode)}
+              style={[
+                styles.unitBtn,
+                {
+                  flex: 1,
+                  backgroundColor: active ? colors.text : 'transparent',
+                  borderRadius: radius.md,
+                  paddingVertical: spacing[2],
+                },
+              ]}
+            >
+              <Text style={{
+                color: active ? colors.background : colors.textMuted,
+                fontSize: fontSize.sm,
+                fontWeight: active ? fontWeight.semibold : fontWeight.normal,
+                textAlign: 'center',
+              }}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* Danger zone */}
       <DangerButton label="Sign out" onPress={handleSignOut} colors={colors} fontSize={fontSize} fontWeight={fontWeight} spacing={spacing} radius={radius} />

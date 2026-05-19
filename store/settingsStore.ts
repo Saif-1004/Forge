@@ -9,6 +9,9 @@ const KEY_FAT = 'pumped_fat_goal';
 const KEY_NOTIF_ENABLED = 'pumped_notif_enabled';
 const KEY_NOTIF_HOUR = 'pumped_notif_hour';
 const KEY_NOTIF_MINUTE = 'pumped_notif_minute';
+const KEY_THEME = 'pumped_theme_mode';
+
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 interface SettingsStore {
   defaultRestSeconds: number;
@@ -19,11 +22,13 @@ interface SettingsStore {
   notificationsEnabled: boolean;
   notificationHour: number;
   notificationMinute: number;
+  themeMode: ThemeMode;
   loaded: boolean;
   load: () => Promise<void>;
   setRestSeconds: (s: number) => Promise<void>;
   setGoals: (goals: Partial<{ calorieGoal: number; proteinGoal: number; carbsGoal: number; fatGoal: number }>) => Promise<void>;
   setNotificationTime: (enabled: boolean, hour: number, minute: number) => Promise<void>;
+  setThemeMode: (mode: ThemeMode) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
@@ -35,11 +40,12 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   notificationsEnabled: false,
   notificationHour: 8,
   notificationMinute: 0,
+  themeMode: 'system',
   loaded: false,
 
   load: async () => {
     try {
-      const [rest, cal, protein, carbs, fat, notifEnabled, notifHour, notifMin] = await Promise.all([
+      const [rest, cal, protein, carbs, fat, notifEnabled, notifHour, notifMin, theme] = await Promise.all([
         SecureStore.getItemAsync(KEY_REST),
         SecureStore.getItemAsync(KEY_CAL),
         SecureStore.getItemAsync(KEY_PROTEIN),
@@ -48,6 +54,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         SecureStore.getItemAsync(KEY_NOTIF_ENABLED),
         SecureStore.getItemAsync(KEY_NOTIF_HOUR),
         SecureStore.getItemAsync(KEY_NOTIF_MINUTE),
+        SecureStore.getItemAsync(KEY_THEME),
       ]);
       set({
         loaded: true,
@@ -59,6 +66,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         ...(notifEnabled !== null ? { notificationsEnabled: notifEnabled === 'true' } : {}),
         ...(notifHour ? { notificationHour: parseInt(notifHour, 10) } : {}),
         ...(notifMin ? { notificationMinute: parseInt(notifMin, 10) } : {}),
+        ...(theme ? { themeMode: theme as ThemeMode } : {}),
       });
     } catch {
       set({ loaded: true });
@@ -79,6 +87,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       ]);
     } catch {}
     set({ notificationsEnabled: enabled, notificationHour: hour, notificationMinute: minute });
+  },
+
+  setThemeMode: async (mode) => {
+    try { await SecureStore.setItemAsync(KEY_THEME, mode); } catch {}
+    set({ themeMode: mode });
   },
 
   setGoals: async (goals) => {

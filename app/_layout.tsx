@@ -15,6 +15,25 @@ import { database } from '@/lib/watermelon/database';
 import { seedExercisesIfNeeded } from '@/lib/watermelon/seed';
 import { scheduleWorkoutReminder } from '@/lib/notifications';
 import { configureRevenueCat, signOutRevenueCat } from '@/lib/revenuecat';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://647d2b08ea2f4eb593015a4a6afeb237@o4511411565101056.ingest.de.sentry.io/4511411574603856',
+  enabled: !__DEV__,
+  sendDefaultPii: false,
+  enableLogs: true,
+  replaysSessionSampleRate: 0,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration()],
+  beforeSend(event) {
+    // Stale refresh tokens are expected — Supabase handles them by signing out.
+    const msg = event.exception?.values?.[0]?.value ?? '';
+    if (msg.includes('Refresh Token Not Found') || msg.includes('refresh_token_not_found')) {
+      return null;
+    }
+    return event;
+  },
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +41,7 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   const { setSession } = useAuthStore();
   const { load: loadSettings } = useSettingsStore();
   const appState = useRef<AppStateStatus>(AppState.currentState);
@@ -89,4 +108,4 @@ export default function RootLayout() {
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
-}
+});
