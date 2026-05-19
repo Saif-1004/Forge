@@ -481,6 +481,15 @@ export default function ProfileTab() {
           <Text style={{ color: colors.error, fontSize: fontSize.base, textAlign: 'center' }}>Delete account</Text>
         </Pressable>
       </View>
+
+      {/* Credits */}
+      <View style={{ paddingHorizontal: s[5], paddingTop: s[5], paddingBottom: s[3] }}>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, textAlign: 'center', lineHeight: 18 }}>
+          Exercise images from{' '}
+          <Text style={{ color: colors.textMuted, fontWeight: '600' }}>wger Workout Manager</Text>
+          {' '}(wger.de) · CC BY SA 4.0
+        </Text>
+      </View>
     </ScrollView>
   );
 }
