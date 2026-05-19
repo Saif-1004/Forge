@@ -96,23 +96,23 @@ Inspired by Cal.ai's icon style — dark background, single bold white silhouett
 ### MVP (v1.0) — Ship First
 
 #### Auth
-- [ ] Email / password sign-up and sign-in
-- [ ] Google OAuth
-- [ ] Apple Sign In (required for iOS App Store)
+- [x] Email / password sign-up and sign-in (OTP magic link)
+- [x] Google OAuth
+- [x] Apple Sign In (required for iOS App Store)
 - [ ] Password reset via email
 - [ ] Onboarding flow (see Onboarding section below)
 
 #### Workout Logging
-- [ ] Create a workout session (auto-date, optional name)
-- [ ] Add exercises (search built-in library + create custom)
-- [ ] Log sets: reps × weight, with lbs/kg toggle per user preference
-- [ ] Mark sets as completed (checkbox tap)
-- [ ] Add notes per exercise
-- [ ] Finish/save session with duration auto-tracked
+- [x] Create a workout session (auto-date, optional name)
+- [x] Add exercises (search built-in library + create custom)
+- [x] Log sets: reps × weight, with lbs/kg toggle per user preference
+- [x] Mark sets as completed (checkbox tap)
+- [x] Add notes per exercise
+- [x] Finish/save session with duration auto-tracked
 
 #### History
-- [ ] Workout history list (date, name, total volume, duration)
-- [ ] Session detail view (all exercises + sets logged)
+- [x] Workout history list (date, name, total volume, duration)
+- [x] Session detail view (all exercises + sets logged)
 
 #### Calendar
 - [ ] Full monthly calendar view — tap any day to see what was trained
@@ -127,8 +127,9 @@ Inspired by Cal.ai's icon style — dark background, single bold white silhouett
 
 #### Profile & Settings
 - [ ] Name, profile photo
-- [ ] Unit system toggle (Imperial ↔ Metric) — updates all displays app-wide instantly
-- [ ] Account deletion (GDPR)
+- [x] Unit system toggle (Imperial ↔ Metric) — updates all displays app-wide instantly
+- [x] Account deletion (GDPR)
+- [x] Appearance toggle (System / Light / Dark)
 
 #### Targets (always editable — not locked to onboarding)
 Every value set during onboarding can be updated at any time from Settings. Changes take effect immediately.
@@ -149,10 +150,10 @@ Every value set during onboarding can be updated at any time from Settings. Chan
 ### Core (v1.1–v1.3)
 
 #### Exercise Library
-- [ ] 200+ built-in exercises (name, primary muscle, secondary muscles, equipment)
-- [ ] Exercise detail with form cues
-- [ ] Create and manage custom exercises
-- [ ] Filter by muscle group, equipment type
+- [x] 200+ built-in exercises (name, primary muscle, secondary muscles, equipment)
+- [x] Exercise detail with form cues
+- [x] Create and manage custom exercises
+- [x] Filter by muscle group, equipment type
 
 #### Exercise Demonstration Media
 - [ ] Each built-in exercise has a demonstration image showing proper form (starting position + key cue)
@@ -165,35 +166,35 @@ Every value set during onboarding can be updated at any time from Settings. Chan
 - [ ] Images are app-version-gated: served via CDN with cache headers, no re-download unless exercise content version bumps
 
 #### Workout Templates
-- [ ] Save any completed session as a template
-- [ ] Build templates from scratch (drag-to-reorder exercises)
-- [ ] Template library view
-- [ ] Start workout from template (pre-fills exercises, last-used weights auto-loaded)
+- [x] Save any completed session as a template
+- [x] Build templates from scratch (drag-to-reorder exercises)
+- [x] Template library view
+- [x] Start workout from template (pre-fills exercises, last-used weights auto-loaded)
 
 #### Personal Records (PRs)
-- [ ] Auto-detected PRs per exercise per rep range (1RM, 3RM, 5RM, etc.)
-- [ ] PR badge shown in session recap
-- [ ] PR history page per exercise
-- [ ] "All-time bests" dashboard card
+- [x] Auto-detected PRs per exercise per rep range (1RM, 3RM, 5RM, etc.)
+- [x] PR badge shown in session recap
+- [x] PR history page per exercise
+- [x] "All-time bests" dashboard card
 
 #### Progress Charts
-- [ ] Per-exercise weight progression line chart (max weight per session)
+- [x] Per-exercise weight progression line chart (max weight per session)
 - [ ] Volume chart (total lbs/kg per session per muscle group)
 - [ ] Weekly volume heatmap
-- [ ] Streak counter (consecutive workout weeks)
+- [x] Streak counter (consecutive workout weeks)
 
 #### Rest Timer
-- [ ] Built-in countdown timer between sets
-- [ ] Configurable per exercise (default 60 / 90 / 120 / 180 s)
-- [ ] Haptic + silent notification when rest ends
-- [ ] Skip / add time controls
-- [ ] Toggle to disable rest timer per session
+- [x] Built-in countdown timer between sets
+- [x] Configurable per exercise (default 60 / 90 / 120 / 180 s)
+- [x] Haptic + silent notification when rest ends
+- [x] Skip / add time controls
+- [x] Toggle to disable rest timer per session
 - [ ] Toggle to hide workout duration clock (some users find it distracting)
 
 #### Reminders
-- [ ] Scheduled push notifications (e.g. "Time to lift — you haven't trained in 3 days")
-- [ ] Custom reminder schedule (days of week + time)
-- [ ] "You last trained X days ago" in-app nudge
+- [x] Scheduled push notifications (e.g. "Time to lift — you haven't trained in 3 days")
+- [x] Custom reminder schedule (days of week + time)
+- [x] "You last trained X days ago" in-app nudge
 
 #### Gym Proximity Notifications *(location-aware)*
 - [ ] Request location permission on first setup (or from Settings)
@@ -227,20 +228,20 @@ Every value set during onboarding can be updated at any time from Settings. Chan
 - [ ] Privacy-safe: sharing is always user-initiated, no auto-posting
 
 #### Nutrition Tracking
-- [ ] Daily calorie ring on home dashboard (eaten / target, animated arc)
-- [ ] Macro breakdown bar (protein · carbs · fat in g, with % of target)
-- [ ] Food log: add meals by meal type (Breakfast, Lunch, Dinner, Snacks)
-- [ ] Food search: built-in database (Open Food Facts — 3M+ products, free, open-source)
-- [ ] Barcode scanner (Expo Camera) — scan any packaged food, auto-fills macros
-- [ ] Custom food entry: name + macros + serving size, saved to personal library
-- [ ] Frequent foods: top 5 most-logged foods surfaced first in search
-- [ ] Serving size editor: tap any logged item to adjust portion
+- [x] Daily calorie ring on home dashboard (eaten / target, animated arc)
+- [x] Macro breakdown bar (protein · carbs · fat in g, with % of target)
+- [x] Food log: add meals by meal type (Breakfast, Lunch, Dinner, Snacks)
+- [x] Food search: built-in database (Open Food Facts — 3M+ products, free, open-source)
+- [x] Barcode scanner (Expo Camera) — scan any packaged food, auto-fills macros
+- [x] Custom food entry: name + macros + serving size, saved to personal library
+- [x] Frequent foods: top 5 most-logged foods surfaced first in search
+- [x] Serving size editor: tap any logged item to adjust portion
 - [ ] Water intake tracker: tap + glasses/ml, daily target with progress bar
 - [ ] Nutrition history: swipe through past days, weekly average summary
-- [ ] Calorie target and macros editable in settings at any time (overrides onboarding value)
+- [x] Calorie target and macros editable in settings at any time (overrides onboarding value)
 - [ ] Net calories view: calories consumed minus estimated workout burn
 - [ ] Nutrition + workout on same calendar — see both in one day view
-- [ ] Works offline (WatermelonDB) — food logs sync to Supabase when online
+- [x] Works offline (WatermelonDB) — food logs sync to Supabase when online
 
 #### AI Nutrition + Calorie Sharing (Share Achievements add-on)
 - [ ] Shareable nutrition cards: "Hit my protein goal 7 days in a row", "500 kcal deficit maintained this week"
@@ -260,7 +261,7 @@ Every value set during onboarding can be updated at any time from Settings. Chan
 - [ ] Historical 1RM trend chart per exercise
 
 #### Body Stats Tracking
-- [ ] Bodyweight log (timeline chart)
+- [x] Bodyweight log (timeline chart)
 - [ ] Body measurements (chest, waist, hips, arms, legs)
 - [ ] Optional: progress photos with comparison view (client-side, end-to-end encrypted)
 
@@ -1493,7 +1494,7 @@ Run before launch using **k6** (open source, Supabase-compatible).
 
 ## Project Phases
 
-### Phase 0 — Foundation (2 weeks)
+### ✅ Phase 0 — Foundation (2 weeks)
 - Repo setup, Supabase project, Expo app scaffold
 - WatermelonDB schema setup + Supabase sync bridge (built in from day one, not bolted on later)
 - Design tokens + component library (using `getdesign` Cal theme)
@@ -1501,7 +1502,7 @@ Run before launch using **k6** (open source, Supabase-compatible).
 - RevenueCat setup (iOS + Android entitlements)
 - CI/CD: EAS Build + GitHub Actions
 
-### Phase 1 — MVP (4 weeks)
+### ✅ Phase 1 — MVP (4 weeks)
 - Workout session create/edit/delete
 - Exercise library + search
 - Set logging with lbs/kg toggle
@@ -1510,7 +1511,7 @@ Run before launch using **k6** (open source, Supabase-compatible).
 - Profile + unit preference
 - Offline sync status indicator
 
-### Phase 2 — Core (4 weeks)
+### ✅ Phase 2 — Core (4 weeks)
 - Templates
 - Personal Records
 - Progress charts
