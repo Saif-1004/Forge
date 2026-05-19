@@ -4,7 +4,7 @@ const expo = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expo,
   {
-    ignores: ['supabase/functions/**'],
+    ignores: ['supabase/functions/**', '.expo/**'],
   },
   {
     settings: {

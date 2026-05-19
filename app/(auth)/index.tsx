@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/Button';
