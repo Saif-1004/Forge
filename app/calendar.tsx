@@ -16,7 +16,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { database } from '@/lib/watermelon/database';
-import type { WorkoutSession } from '@/lib/watermelon/models';
+import type { WorkoutSession, FoodLog } from '@/lib/watermelon/models';
 import { suggestExercises, exerciseNamesByIds, type ExerciseSuggestion } from '@/lib/workout/planSuggestions';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -50,6 +50,7 @@ interface PlanModal {
   date: string;
   existingId: string | null;
   isEditing: boolean;
+  isPast: boolean;
 }
 
 export default function CalendarScreen() {
@@ -72,6 +73,9 @@ export default function CalendarScreen() {
   const [viewExerciseNames, setViewExerciseNames] = useState<Record<string, string>>({});
   const [loadingExercises, setLoadingExercises] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  interface NutritionSummary { calories: number; protein: number; carbs: number; fat: number }
+  const [nutritionForDay, setNutritionForDay] = useState<NutritionSummary | null>(null);
 
   const todayStr = toISODate(now);
 
@@ -143,41 +147,41 @@ export default function CalendarScreen() {
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
-  const openModal = useCallback((dateStr: string) => {
+  const openModal = useCallback(async (dateStr: string) => {
     const data = dayMap.get(dateStr);
     const hasExisting = !!data?.plannedId;
-    setPlanModal({ date: dateStr, existingId: data?.plannedId ?? null, isEditing: !hasExisting });
+    const isPastDay = dateStr <= todayStr;
+    setPlanModal({ date: dateStr, existingId: data?.plannedId ?? null, isEditing: !hasExisting && !isPastDay, isPast: isPastDay });
     setSelectedMuscles(data?.planned ?? []);
     setSelectedExerciseIds(data?.plannedExerciseIds ?? []);
     setAvailableExercises([]);
     setViewExerciseNames({});
-  }, [dayMap]);
+    setNutritionForDay(null);
+    if (user) {
+      try {
+        const foodLogsCol = database.collections.get<FoodLog>('food_logs');
+        const logs = await foodLogsCol.query(
+          Q.where('user_id', user.id),
+          Q.where('date', dateStr),
+          Q.where('is_deleted', false),
+        ).fetch();
+        if (logs.length > 0) {
+          setNutritionForDay({
+            calories: logs.reduce((s, l) => s + l.caloriesKcal, 0),
+            protein: logs.reduce((s, l) => s + l.proteinG, 0),
+            carbs: logs.reduce((s, l) => s + l.carbsG, 0),
+            fat: logs.reduce((s, l) => s + l.fatG, 0),
+          });
+        }
+      } catch {}
+    }
+  }, [dayMap, user]);
 
   const handleDayPress = useCallback((dateStr: string) => {
     const data = dayMap.get(dateStr);
-    const isPast = dateStr < todayStr;
-    const isToday = dateStr === todayStr;
-    const isFuture = dateStr > todayStr;
-
     if (data?.sessionId) { router.push(`/workout/session/${data.sessionId}`); return; }
-
-    if (data?.isRestDay && data.restDayId) {
-      Alert.alert('Rest Day', `${dateStr} is marked as a rest day.`, [
-        { text: 'OK', style: 'cancel' },
-        { text: 'Remove Rest Day', style: 'destructive', onPress: async () => { await supabase.from('rest_days').delete().eq('id', data.restDayId!); loadMonth(); } },
-      ]);
-      return;
-    }
-
-    if (isFuture) { openModal(dateStr); return; }
-
-    if (isPast || isToday) {
-      Alert.alert('Mark as Rest Day?', `Mark ${dateStr} as a rest day?`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Mark Rest Day', onPress: async () => { if (!user) return; await supabase.from('rest_days').upsert({ user_id: user.id, date: dateStr }, { onConflict: 'user_id,date' }); loadMonth(); } },
-      ]);
-    }
-  }, [dayMap, todayStr, user, loadMonth, openModal]);
+    openModal(dateStr);
+  }, [dayMap, openModal]);
 
   const toggleMuscle = (mg: string) => {
     setSelectedMuscles(prev => prev.includes(mg) ? prev.filter(m => m !== mg) : [...prev, mg]);
@@ -340,16 +344,15 @@ export default function CalendarScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: s[4] }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold }}>
-                  {planModal?.isEditing ? (planModal.existingId ? 'Edit Plan' : 'Plan Workout') : 'Planned Workout'}
+                  {planModal?.isPast
+                    ? (dayMap.get(planModal.date)?.sessionId ? 'Workout Day' : dayMap.get(planModal.date)?.isRestDay ? 'Rest Day' : 'Day Summary')
+                    : planModal?.isEditing ? (planModal.existingId ? 'Edit Plan' : 'Plan Workout') : 'Planned Workout'}
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: 2 }}>{planModal?.date}</Text>
               </View>
-              {!planModal?.isEditing && (
+              {!planModal?.isEditing && !planModal?.isPast && (
                 <Pressable
-                  onPress={() => {
-                    // switching to edit — load existing exercises into available list
-                    setPlanModal(prev => prev ? { ...prev, isEditing: true } : null);
-                  }}
+                  onPress={() => setPlanModal(prev => prev ? { ...prev, isEditing: true } : null)}
                   style={{ backgroundColor: colors.background, borderRadius: radius.md, paddingVertical: s[2], paddingHorizontal: s[3] }}
                 >
                   <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>Edit</Text>
@@ -358,122 +361,175 @@ export default function CalendarScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
-              {/* ── Muscle groups ── */}
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: 8 }}>MUSCLE GROUPS</Text>
-              {planModal?.isEditing ? (
-                <View style={[styles.chipRow, { marginBottom: s[4] }]}>
-                  {MUSCLE_GROUPS.map((mg) => {
-                    const active = selectedMuscles.includes(mg);
-                    return (
-                      <Pressable key={mg} onPress={() => toggleMuscle(mg)}
-                        style={{ backgroundColor: active ? colors.text : colors.background, borderRadius: radius.md, paddingVertical: s[2], paddingHorizontal: s[3] }}
-                      >
-                        <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>{mg}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View style={[styles.chipRow, { marginBottom: s[4] }]}>
-                  {viewMuscles.map((mg) => (
-                    <View key={mg} style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: s[2], paddingHorizontal: s[3] }}>
-                      <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>{mg}</Text>
-                    </View>
-                  ))}
-                  {viewMuscles.length === 0 && <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>None selected</Text>}
-                </View>
-              )}
-
-              {/* ── Exercises ── */}
-              {planModal?.isEditing ? (
+              {/* ── Planning UI (future days only) ── */}
+              {!planModal?.isPast && (
                 <>
-                  {loadingExercises && <ActivityIndicator size="small" color={colors.textMuted} style={{ marginBottom: s[4] }} />}
-                  {!loadingExercises && selectedMuscles.length > 0 && (
-                    <>
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: 8 }}>EXERCISES</Text>
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: s[3] }}>
-                        Select the exercises you plan to do
-                      </Text>
-                      {Object.entries(exercisesByGroup).map(([group, exercises]) => (
-                        <View key={group} style={{ marginBottom: s[3] }}>
-                          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', marginBottom: s[2] }}>{group.toUpperCase()}</Text>
-                          {exercises.map((ex) => {
-                            const selected = selectedExerciseIds.includes(ex.id);
-                            return (
-                              <Pressable
-                                key={ex.id}
-                                onPress={() => toggleExercise(ex.id)}
-                                style={({ pressed }) => ({
-                                  flexDirection: 'row', alignItems: 'center',
-                                  paddingVertical: s[3], paddingHorizontal: s[3],
-                                  marginBottom: 2, borderRadius: radius.md,
-                                  backgroundColor: selected ? colors.text + '12' : 'transparent',
-                                  opacity: pressed ? 0.7 : 1,
-                                })}
-                              >
-                                <View style={{
-                                  width: 20, height: 20, borderRadius: 4,
-                                  borderWidth: 1.5, borderColor: selected ? colors.text : colors.border,
-                                  backgroundColor: selected ? colors.text : 'transparent',
-                                  alignItems: 'center', justifyContent: 'center',
-                                  marginRight: s[3],
-                                }}>
-                                  {selected && <Text style={{ color: colors.background, fontSize: 11, fontWeight: '700' }}>✓</Text>}
-                                </View>
-                                <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>{ex.name}</Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      ))}
-                    </>
-                  )}
-                </>
-              ) : (
-                viewExerciseIds.length > 0 && (
-                  <>
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: 8 }}>EXERCISES</Text>
-                    <View style={{ marginBottom: s[4] }}>
-                      {viewExerciseIds.map((id) => {
-                        const name = viewExerciseNames[id];
-                        if (!name) return null;
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: 8 }}>MUSCLE GROUPS</Text>
+                  {planModal?.isEditing ? (
+                    <View style={[styles.chipRow, { marginBottom: s[4] }]}>
+                      {MUSCLE_GROUPS.map((mg) => {
+                        const active = selectedMuscles.includes(mg);
                         return (
-                          <View key={id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: s[2] }}>
-                            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.warning, marginRight: s[3] }} />
-                            <Text style={{ color: colors.text, fontSize: fontSize.base }}>{name}</Text>
-                          </View>
+                          <Pressable key={mg} onPress={() => toggleMuscle(mg)}
+                            style={{ backgroundColor: active ? colors.text : colors.background, borderRadius: radius.md, paddingVertical: s[2], paddingHorizontal: s[3] }}
+                          >
+                            <Text style={{ color: active ? colors.background : colors.textMuted, fontSize: fontSize.sm, fontWeight: active ? fontWeight.semibold : fontWeight.normal }}>{mg}</Text>
+                          </Pressable>
                         );
                       })}
                     </View>
-                  </>
-                )
+                  ) : (
+                    <View style={[styles.chipRow, { marginBottom: s[4] }]}>
+                      {viewMuscles.map((mg) => (
+                        <View key={mg} style={{ backgroundColor: colors.text, borderRadius: radius.md, paddingVertical: s[2], paddingHorizontal: s[3] }}>
+                          <Text style={{ color: colors.background, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>{mg}</Text>
+                        </View>
+                      ))}
+                      {viewMuscles.length === 0 && <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>None selected</Text>}
+                    </View>
+                  )}
+
+                  {/* ── Exercises ── */}
+                  {planModal?.isEditing ? (
+                    <>
+                      {loadingExercises && <ActivityIndicator size="small" color={colors.textMuted} style={{ marginBottom: s[4] }} />}
+                      {!loadingExercises && selectedMuscles.length > 0 && (
+                        <>
+                          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: 8 }}>EXERCISES</Text>
+                          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: s[3] }}>
+                            Select the exercises you plan to do
+                          </Text>
+                          {Object.entries(exercisesByGroup).map(([group, exercises]) => (
+                            <View key={group} style={{ marginBottom: s[3] }}>
+                              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600', marginBottom: s[2] }}>{group.toUpperCase()}</Text>
+                              {exercises.map((ex) => {
+                                const selected = selectedExerciseIds.includes(ex.id);
+                                return (
+                                  <Pressable
+                                    key={ex.id}
+                                    onPress={() => toggleExercise(ex.id)}
+                                    style={({ pressed }) => ({
+                                      flexDirection: 'row', alignItems: 'center',
+                                      paddingVertical: s[3], paddingHorizontal: s[3],
+                                      marginBottom: 2, borderRadius: radius.md,
+                                      backgroundColor: selected ? colors.text + '12' : 'transparent',
+                                      opacity: pressed ? 0.7 : 1,
+                                    })}
+                                  >
+                                    <View style={{
+                                      width: 20, height: 20, borderRadius: 4,
+                                      borderWidth: 1.5, borderColor: selected ? colors.text : colors.border,
+                                      backgroundColor: selected ? colors.text : 'transparent',
+                                      alignItems: 'center', justifyContent: 'center',
+                                      marginRight: s[3],
+                                    }}>
+                                      {selected && <Text style={{ color: colors.background, fontSize: 11, fontWeight: '700' }}>✓</Text>}
+                                    </View>
+                                    <Text style={{ color: colors.text, fontSize: fontSize.base, flex: 1 }}>{ex.name}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          ))}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    viewExerciseIds.length > 0 && (
+                      <>
+                        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: 8 }}>EXERCISES</Text>
+                        <View style={{ marginBottom: s[4] }}>
+                          {viewExerciseIds.map((id) => {
+                            const name = viewExerciseNames[id];
+                            if (!name) return null;
+                            return (
+                              <View key={id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: s[2] }}>
+                                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.warning, marginRight: s[3] }} />
+                                <Text style={{ color: colors.text, fontSize: fontSize.base }}>{name}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )
+                  )}
+                </>
+              )}
+              {/* ── Nutrition summary ── */}
+              {nutritionForDay && (
+                <View style={{ marginTop: s[4] }}>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' as const, letterSpacing: 0.8, marginBottom: s[3] }}>NUTRITION</Text>
+                  <View style={{ flexDirection: 'row', gap: s[2] }}>
+                    {[
+                      { label: 'Calories', value: Math.round(nutritionForDay.calories), unit: 'kcal' },
+                      { label: 'Protein', value: Math.round(nutritionForDay.protein), unit: 'g' },
+                      { label: 'Carbs', value: Math.round(nutritionForDay.carbs), unit: 'g' },
+                      { label: 'Fat', value: Math.round(nutritionForDay.fat), unit: 'g' },
+                    ].map(({ label, value, unit }) => (
+                      <View key={label} style={{ flex: 1, backgroundColor: colors.background, borderRadius: radius.lg, padding: s[3], alignItems: 'center' }}>
+                        <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.bold }}>{value}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 9 }}>{unit}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 9, marginTop: 1 }}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
               )}
             </ScrollView>
 
             {/* Action buttons */}
             <View style={{ flexDirection: 'row', gap: s[3], marginTop: s[3] }}>
-              {planModal?.existingId && (
-                <Pressable onPress={handleDeletePlan} disabled={saving}
-                  style={({ pressed }) => ({ flex: 1, backgroundColor: colors.error + '18', borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.7 : 1 })}
+              {planModal?.isPast ? (
+                <Pressable
+                  disabled={saving}
+                  onPress={async () => {
+                    if (!user || !planModal) return;
+                    const existing = dayMap.get(planModal.date);
+                    setSaving(true);
+                    try {
+                      if (existing?.isRestDay && existing.restDayId) {
+                        await supabase.from('rest_days').delete().eq('id', existing.restDayId);
+                      } else {
+                        await supabase.from('rest_days').upsert({ user_id: user.id, date: planModal.date }, { onConflict: 'user_id,date' });
+                      }
+                      setPlanModal(null);
+                      loadMonth();
+                    } finally { setSaving(false); }
+                  }}
+                  style={({ pressed }) => ({ flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.7 : 1, borderWidth: 1, borderColor: colors.border })}
                 >
-                  <Text style={{ color: colors.error, fontSize: fontSize.base, textAlign: 'center' }}>Remove</Text>
-                </Pressable>
-              )}
-              {planModal?.isEditing ? (
-                <Pressable onPress={handleSavePlan} disabled={saving || selectedMuscles.length === 0}
-                  style={({ pressed }) => ({ flex: 2, backgroundColor: selectedMuscles.length === 0 ? colors.border : colors.text, borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.8 : 1 })}
-                >
-                  {saving
-                    ? <ActivityIndicator color={colors.background} />
-                    : <Text style={{ color: selectedMuscles.length === 0 ? colors.textMuted : colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold, textAlign: 'center' }}>Save Plan</Text>
-                  }
+                  {saving ? <ActivityIndicator color={colors.text} /> : (
+                    <Text style={{ color: colors.text, fontSize: fontSize.base, textAlign: 'center' }}>
+                      {dayMap.get(planModal?.date ?? '')?.isRestDay ? 'Remove Rest Day' : 'Mark Rest Day'}
+                    </Text>
+                  )}
                 </Pressable>
               ) : (
-                <Pressable onPress={() => setPlanModal(prev => prev ? { ...prev, isEditing: true } : null)}
-                  style={({ pressed }) => ({ flex: 2, backgroundColor: colors.text, borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.8 : 1 })}
-                >
-                  <Text style={{ color: colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold, textAlign: 'center' }}>Edit Plan</Text>
-                </Pressable>
+                <>
+                  {planModal?.existingId && (
+                    <Pressable onPress={handleDeletePlan} disabled={saving}
+                      style={({ pressed }) => ({ flex: 1, backgroundColor: colors.error + '18', borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.7 : 1 })}
+                    >
+                      <Text style={{ color: colors.error, fontSize: fontSize.base, textAlign: 'center' }}>Remove</Text>
+                    </Pressable>
+                  )}
+                  {planModal?.isEditing ? (
+                    <Pressable onPress={handleSavePlan} disabled={saving || selectedMuscles.length === 0}
+                      style={({ pressed }) => ({ flex: 2, backgroundColor: selectedMuscles.length === 0 ? colors.border : colors.text, borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.8 : 1 })}
+                    >
+                      {saving
+                        ? <ActivityIndicator color={colors.background} />
+                        : <Text style={{ color: selectedMuscles.length === 0 ? colors.textMuted : colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold, textAlign: 'center' }}>Save Plan</Text>
+                      }
+                    </Pressable>
+                  ) : (
+                    <Pressable onPress={() => setPlanModal(prev => prev ? { ...prev, isEditing: true } : null)}
+                      style={({ pressed }) => ({ flex: 2, backgroundColor: colors.text, borderRadius: radius.lg, paddingVertical: s[4], opacity: pressed ? 0.8 : 1 })}
+                    >
+                      <Text style={{ color: colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold, textAlign: 'center' }}>Edit Plan</Text>
+                    </Pressable>
+                  )}
+                </>
               )}
             </View>
           </Pressable>

@@ -14,6 +14,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { database } from '@/lib/watermelon/database';
 import { seedExercisesIfNeeded } from '@/lib/watermelon/seed';
 import { scheduleWorkoutReminder } from '@/lib/notifications';
+import '@/lib/gymGeofence';
+import { startGymProximityTask, stopGymProximityTask } from '@/lib/gymGeofence';
 import { configureRevenueCat, signOutRevenueCat } from '@/lib/revenuecat';
 import * as Sentry from '@sentry/react-native';
 
@@ -52,9 +54,14 @@ export default Sentry.wrap(function RootLayout() {
   useEffect(() => {
     seedExercisesIfNeeded().catch(() => {});
     loadSettings().then(() => {
-      const { notificationsEnabled, notificationHour, notificationMinute } = useSettingsStore.getState();
+      const { notificationsEnabled, notificationHour, notificationMinute, gymProximityEnabled } = useSettingsStore.getState();
       if (notificationsEnabled) {
         scheduleWorkoutReminder(notificationHour, notificationMinute).catch(() => {});
+      }
+      if (gymProximityEnabled) {
+        startGymProximityTask().catch(() => {});
+      } else {
+        stopGymProximityTask().catch(() => {});
       }
     }).catch(() => {});
 

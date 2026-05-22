@@ -10,15 +10,19 @@ import {
   StyleSheet,
   Switch,
   Platform,
+  Image,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { scheduleWorkoutReminder, cancelWorkoutReminder, requestNotificationPermissions } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase/client';
+import { saveGymLocation, clearGymLocation, loadGymLocation, startGymProximityTask, stopGymProximityTask } from '@/lib/gymGeofence';
 import { database } from '@/lib/watermelon/database';
 import type { BodyWeightLog } from '@/lib/watermelon/models';
 
@@ -56,16 +60,21 @@ export default function ProfileTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const {
-    user, displayName, unitPreference,
+    user, displayName, photoUrl, unitPreference,
     primaryGoal, trainingDaysPerWeek, bodyWeightKg,
-    updateDisplayName, updateUnitPreference, updateGoals, signOut,
+    updateDisplayName, updateUnitPreference, updateGoals, updatePhotoUrl, signOut,
   } = useAuthStore();
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const {
     defaultRestSeconds, setRestSeconds,
-    calorieGoal, proteinGoal, carbsGoal, fatGoal, setGoals,
+    calorieGoal, proteinGoal, carbsGoal, fatGoal, waterGoalMl, setGoals,
     notificationsEnabled, notificationHour, notificationMinute, setNotificationTime,
     themeMode, setThemeMode,
+    hideDurationClock, setHideDurationClock,
+    gymProximityEnabled, setGymProximityEnabled,
   } = useSettingsStore();
+  const [gymLocation, setGymLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [settingGym, setSettingGym] = useState(false);
 
   const isImperial = unitPreference === 'lbs';
   const weightUnit = isImperial ? 'lbs' : 'kg';
@@ -80,6 +89,7 @@ export default function ProfileTab() {
   const [proteinInput, setProteinInput] = useState(String(proteinGoal));
   const [carbsInput, setCarbsInput] = useState(String(carbsGoal));
   const [fatInput, setFatInput] = useState(String(fatGoal));
+  const [waterInput, setWaterInput] = useState(String(waterGoalMl));
 
   const [editingBodyWeight, setEditingBodyWeight] = useState(false);
   const [bodyWeightInput, setBodyWeightInput] = useState(
@@ -107,6 +117,7 @@ export default function ProfileTab() {
     setProteinInput(String(proteinGoal));
     setCarbsInput(String(carbsGoal));
     setFatInput(String(fatGoal));
+    setWaterInput(String(waterGoalMl));
     setEditingGoals(true);
   };
 
@@ -116,6 +127,7 @@ export default function ProfileTab() {
       proteinGoal: parseInt(proteinInput, 10) || proteinGoal,
       carbsGoal: parseInt(carbsInput, 10) || carbsGoal,
       fatGoal: parseInt(fatInput, 10) || fatGoal,
+      waterGoalMl: parseInt(waterInput, 10) || waterGoalMl,
     });
     setEditingGoals(false);
   };
@@ -186,6 +198,86 @@ export default function ProfileTab() {
     ]);
   };
 
+  const handlePickPhoto = async () => {
+    if (!user) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo library access to set a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+      base64: false,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    setUploadingPhoto(true);
+    try {
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const ext = asset.uri.split('.').pop() ?? 'jpg';
+      const path = `${user.id}/avatar.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { upsert: true, contentType: asset.mimeType ?? 'image/jpeg' });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      await updatePhotoUrl(publicUrl);
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message ?? 'Could not upload photo');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Load gym location on mount
+  useState(() => { loadGymLocation().then(setGymLocation).catch(() => {}); });
+
+  const handleToggleGymProximity = async (val: boolean) => {
+    if (val) {
+      const { status: fg } = await Location.requestForegroundPermissionsAsync();
+      if (fg !== 'granted') {
+        Alert.alert('Permission needed', 'Allow location access in Settings to use gym proximity alerts.');
+        return;
+      }
+      await setGymProximityEnabled(true);
+      startGymProximityTask().catch(() => {});
+    } else {
+      await setGymProximityEnabled(false);
+      stopGymProximityTask().catch(() => {});
+    }
+  };
+
+  const handleSetGymLocation = async () => {
+    setSettingGym(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow location access to set your gym location.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      await saveGymLocation(latitude, longitude);
+      setGymLocation({ lat: latitude, lng: longitude });
+      Alert.alert('Gym location saved', `Set to ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not get location');
+    } finally {
+      setSettingGym(false);
+    }
+  };
+
+  const handleClearGymLocation = async () => {
+    await clearGymLocation();
+    setGymLocation(null);
+    await setGymProximityEnabled(false);
+    stopGymProximityTask().catch(() => {});
+  };
+
   const goalSummary = [
     primaryGoal ? GOAL_LABELS[primaryGoal] : null,
     trainingDaysPerWeek ? `${trainingDaysPerWeek}d/wk` : null,
@@ -202,6 +294,36 @@ export default function ProfileTab() {
       <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, paddingHorizontal: s[5], marginBottom: s[6] }}>
         Profile
       </Text>
+
+      {/* ── Avatar ── */}
+      <View style={{ alignItems: 'center', marginBottom: s[6] }}>
+        <Pressable onPress={handlePickPhoto} disabled={uploadingPhoto} style={{ position: 'relative' }}>
+          {photoUrl ? (
+            <Image
+              source={{ uri: photoUrl }}
+              style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.surface }}
+            />
+          ) : (
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: colors.text, fontSize: 28, fontWeight: fontWeight.semibold }}>
+                {(displayName ?? user?.email ?? '?')[0].toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={{ position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center' }}>
+            {uploadingPhoto ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <Text style={{ color: colors.background, fontSize: 13 }}>✎</Text>
+            )}
+          </View>
+        </Pressable>
+        {displayName && (
+          <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold, marginTop: s[3] }}>
+            {displayName}
+          </Text>
+        )}
+      </View>
 
       {/* ── Account ── */}
       <SectionHeader label="ACCOUNT" colors={colors} fontSize={fontSize} spacing={s} />
@@ -424,6 +546,15 @@ export default function ProfileTab() {
                 </View>
               ))}
             </View>
+            <View style={{ marginBottom: s[3] }}>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: s[1] }}>Daily water goal (ml)</Text>
+              <TextInput
+                value={waterInput}
+                onChangeText={setWaterInput}
+                keyboardType="number-pad"
+                style={{ color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: s[3], paddingVertical: s[2] }}
+              />
+            </View>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: s[4] }}>
               <Pressable onPress={() => setEditingGoals(false)} hitSlop={8}>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Cancel</Text>
@@ -462,6 +593,67 @@ export default function ProfileTab() {
             })}
           </View>
         </View>
+        <Divider colors={colors} spacing={s} />
+
+        {/* Hide workout duration clock */}
+        <View style={[styles.pressableRow, { paddingVertical: s[3] }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: fontSize.base }}>Hide workout clock</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>Hides the elapsed time during workouts</Text>
+          </View>
+          <Switch
+            value={hideDurationClock}
+            onValueChange={setHideDurationClock}
+            trackColor={{ false: colors.border, true: colors.text }}
+            thumbColor={colors.background}
+          />
+        </View>
+        <Divider colors={colors} spacing={s} />
+
+        {/* Gym proximity alerts */}
+        <View style={[styles.pressableRow, { paddingVertical: s[3] }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: fontSize.base }}>Gym Proximity Alerts</Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>Notify when you arrive at the gym</Text>
+          </View>
+          <Switch
+            value={gymProximityEnabled}
+            onValueChange={handleToggleGymProximity}
+            trackColor={{ false: colors.border, true: colors.text }}
+            thumbColor={colors.background}
+          />
+        </View>
+        {gymProximityEnabled && (
+          <>
+            <Divider colors={colors} spacing={s} />
+            <View style={{ paddingHorizontal: s[4], paddingVertical: s[3] }}>
+              {gymLocation ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Gym location</Text>
+                    <Text style={{ color: colors.text, fontSize: fontSize.sm, marginTop: 2 }}>
+                      {gymLocation.lat.toFixed(4)}, {gymLocation.lng.toFixed(4)}
+                    </Text>
+                  </View>
+                  <Pressable onPress={handleSetGymLocation} disabled={settingGym} hitSlop={8} style={{ marginRight: s[3] }}>
+                    {settingGym ? <ActivityIndicator size="small" color={colors.text} /> : <Text style={{ color: colors.text, fontSize: fontSize.sm }}>Update</Text>}
+                  </Pressable>
+                  <Pressable onPress={handleClearGymLocation} hitSlop={8}>
+                    <Text style={{ color: colors.error, fontSize: fontSize.sm }}>Remove</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={handleSetGymLocation} disabled={settingGym} style={{ flexDirection: 'row', alignItems: 'center', gap: s[2] }}>
+                  {settingGym ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <Text style={{ color: colors.text, fontSize: fontSize.sm }}>Set gym location (use current location)</Text>
+                  )}
+                </Pressable>
+              )}
+            </View>
+          </>
+        )}
       </Card>
 
       {/* ── Danger zone ── */}

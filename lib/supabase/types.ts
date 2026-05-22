@@ -35,6 +35,7 @@ export interface Database {
           carbs_target_g: number | null;
           fat_target_g: number | null;
           nutrition_tracking_enabled: boolean;
+          photo_url: string | null;
           onboarding_completed_at: string | null;
           created_at: string;
           deleted_at: string | null;
@@ -61,6 +62,7 @@ export interface Database {
           carbs_target_g?: number | null;
           fat_target_g?: number | null;
           nutrition_tracking_enabled?: boolean;
+          photo_url?: string | null;
           onboarding_completed_at?: string | null;
           deleted_at?: string | null;
         };
@@ -85,6 +87,7 @@ export interface Database {
           carbs_target_g?: number | null;
           fat_target_g?: number | null;
           nutrition_tracking_enabled?: boolean;
+          photo_url?: string | null;
           onboarding_completed_at?: string | null;
           deleted_at?: string | null;
         };
@@ -400,6 +403,62 @@ export interface Database {
           expires_at?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      teams: {
+        Row: {
+          id: string;
+          name: string;
+          invite_code: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          invite_code?: string;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          invite_code?: string;
+        };
+        Relationships: [];
+      };
+      team_members: {
+        Row: {
+          id: string;
+          team_id: string;
+          user_id: string;
+          role: TeamRole;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          team_id: string;
+          user_id: string;
+          role?: TeamRole;
+        };
+        Update: {
+          role?: TeamRole;
+        };
+        Relationships: [];
+      };
+      team_nudges: {
+        Row: {
+          id: string;
+          team_id: string;
+          from_user_id: string;
+          to_user_id: string;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          team_id: string;
+          from_user_id: string;
+          to_user_id: string;
+        };
+        Update: Record<string, never>;
         Relationships: [];
       };
     };

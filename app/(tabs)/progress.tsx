@@ -39,6 +39,7 @@ interface ProgressData {
   muscleThisWeek: string[];
   totalSessions: number;
   weightEntries: WeightEntry[];
+  dailySessions: Record<string, number>;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -299,6 +300,76 @@ function BodyWeightCard({ entries, userId, onSaved, colors, fontSize, fontWeight
   );
 }
 
+// ─── Activity Heatmap ─────────────────────────────────────────────────────────
+
+const HEATMAP_WEEKS = 16;
+
+function ActivityHeatmap({ dailySessions, colors, fontSize, spacing, radius }: {
+  dailySessions: Record<string, number>;
+  colors: any; fontSize: any; spacing: any; radius: any;
+}) {
+  const today = new Date();
+  const todayStr = toISODate(today);
+  const todayDow = today.getDay() === 0 ? 7 : today.getDay();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - (todayDow - 1));
+
+  const columns: { date: string; count: number; isToday: boolean; isFuture: boolean }[][] = [];
+  for (let w = HEATMAP_WEEKS - 1; w >= 0; w--) {
+    const col: { date: string; count: number; isToday: boolean; isFuture: boolean }[] = [];
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date(weekStart);
+      dt.setDate(weekStart.getDate() - w * 7 + d);
+      const dateStr = toISODate(dt);
+      col.push({ date: dateStr, count: dailySessions[dateStr] ?? 0, isToday: dateStr === todayStr, isFuture: dt > today });
+    }
+    columns.push(col);
+  }
+
+  const GAP = 2;
+  const CELL = Math.floor((SCREEN_W - spacing[5] * 2 - spacing[4] * 2 - (HEATMAP_WEEKS - 1) * GAP) / HEATMAP_WEEKS);
+
+  const oldestDate = columns[0][0].date;
+  const midDate = columns[Math.floor(HEATMAP_WEEKS / 2)][0].date;
+  const fmtMonth = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { month: 'short' });
+
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }}>
+      <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: '600', marginBottom: 2 }}>Activity</Text>
+      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: spacing[3] }}>Last {HEATMAP_WEEKS} weeks</Text>
+      <View style={{ flexDirection: 'row', gap: GAP }}>
+        {columns.map((col, ci) => (
+          <View key={ci} style={{ gap: GAP }}>
+            {col.map((cell, di) => (
+              <View
+                key={di}
+                style={{
+                  width: CELL, height: CELL, borderRadius: 2,
+                  backgroundColor: cell.count > 0 ? colors.success : colors.text,
+                  opacity: cell.isFuture ? 0 : cell.count > 0 ? 1 : 0.1,
+                  borderWidth: cell.isToday ? 1 : 0,
+                  borderColor: colors.text,
+                }}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing[2] }}>
+        <Text style={{ color: colors.textMuted, fontSize: 9 }}>{fmtMonth(oldestDate)}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 9 }}>{fmtMonth(midDate)}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 9 }}>Today</Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing[2] }}>
+        <View style={{ width: CELL, height: CELL, borderRadius: 2, backgroundColor: colors.text, opacity: 0.1 }} />
+        <Text style={{ color: colors.textMuted, fontSize: 9 }}>Rest</Text>
+        <View style={{ width: CELL, height: CELL, borderRadius: 2, backgroundColor: colors.success }} />
+        <Text style={{ color: colors.textMuted, fontSize: 9 }}>Workout</Text>
+      </View>
+    </View>
+  );
+}
+
 // ─── Load data ────────────────────────────────────────────────────────────────
 
 async function loadProgressData(userId: string): Promise<ProgressData> {
@@ -337,24 +408,34 @@ async function loadProgressData(userId: string): Promise<ProgressData> {
     return mg !== 0 ? mg : a.exerciseName.localeCompare(b.exerciseName);
   });
 
-  // Last 10 weeks of volume
+  // Last 10 weeks of volume, HEATMAP_WEEKS for heatmap
+  const VOLUME_WEEKS = 10;
   const now = new Date();
   const thisWeekStart = startOfWeek(now);
   type WeekBucket = WeekBar & { _start: number };
-  const weeks: WeekBucket[] = Array.from({ length: 10 }, (_, i) => {
+  const weeks: WeekBucket[] = Array.from({ length: VOLUME_WEEKS }, (_, i) => {
     const d = new Date(thisWeekStart);
     d.setDate(d.getDate() - i * 7);
     return { label: weekLabel(d), volume: 0, sessions: 0, _start: d.getTime() };
   }).reverse();
+
+  const heatmapStart = new Date(thisWeekStart);
+  heatmapStart.setDate(heatmapStart.getDate() - (HEATMAP_WEEKS - 1) * 7);
 
   const allSessions = await sessionsCol
     .query(
       Q.where('user_id', userId),
       Q.where('is_deleted', false),
       Q.where('ended_at', Q.notEq(null)),
-      Q.where('started_at', Q.gte(weeks[0]._start)),
+      Q.where('started_at', Q.gte(heatmapStart.getTime())),
     )
     .fetch();
+
+  const dailySessions: Record<string, number> = {};
+  for (const s of allSessions) {
+    const d = toISODate(new Date(s.startedAt));
+    dailySessions[d] = (dailySessions[d] ?? 0) + 1;
+  }
 
   // Muscle groups trained this week
   const weekStart = thisWeekStart.getTime();
@@ -430,6 +511,7 @@ async function loadProgressData(userId: string): Promise<ProgressData> {
     muscleThisWeek: Array.from(muscleSet).filter((m) => m !== 'cardio'),
     totalSessions: allSessions.length,
     weightEntries,
+    dailySessions,
   };
 }
 
@@ -593,6 +675,9 @@ export default function ProgressTab() {
         <ActivityIndicator color={colors.text} style={{ marginTop: spacing[10] }} />
       ) : !data || !user ? null : (
         <>
+          {/* Activity heatmap */}
+          <ActivityHeatmap dailySessions={data.dailySessions} colors={colors} fontSize={fontSize} spacing={spacing} radius={radius} />
+
           {/* Volume chart */}
           <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4] }]}>
             <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold, marginBottom: spacing[1] }}>

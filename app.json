@@ -2,7 +2,7 @@
   "expo": {
     "name": "Forge",
     "slug": "forge-workout",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,9 +17,13 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.forgeapp.workout",
       "usesAppleSignIn": true,
-      "buildNumber": "7",
+      "buildNumber": "8",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Forge uses your location to alert you when you arrive at the gym.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Forge uses background location to send a workout reminder when you arrive at the gym.",
+        "NSLocationAlwaysUsageDescription": "Forge uses background location to send a workout reminder when you arrive at the gym.",
+        "UIBackgroundModes": ["location", "fetch"]
       }
     },
     "android": {
@@ -31,7 +35,12 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -54,6 +63,13 @@
         {
           "photosPermission": "Allow Forge to access your photos for AI food analysis.",
           "cameraPermission": "Allow Forge to take photos for AI food analysis."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Forge to access your location to send workout reminders when you arrive at the gym.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [

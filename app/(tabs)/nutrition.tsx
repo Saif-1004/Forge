@@ -84,7 +84,7 @@ export default function NutritionTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const { calorieGoal, proteinGoal, carbsGoal, fatGoal } = useSettingsStore();
+  const { calorieGoal, proteinGoal, carbsGoal, fatGoal, waterGoalMl } = useSettingsStore();
 
   const [date, setDate] = useState(new Date());
   const [dayData, setDayData] = useState<DayData>({ logs: [], waterMl: 0, waterLogIds: [] });
@@ -229,7 +229,7 @@ export default function NutritionTab() {
           {/* Calorie summary */}
           <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, marginHorizontal: spacing[5], padding: spacing[4], marginBottom: spacing[3] }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: spacing[3] }}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: 2 }}>CALORIES</Text>
                 <Text style={{ color: colors.text, fontSize: fontSize['3xl'] ?? 32, fontWeight: fontWeight.bold }}>
                   {Math.round(totals.calories)}
@@ -239,14 +239,27 @@ export default function NutritionTab() {
                   <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
                     {Math.max(calorieGoal - Math.round(totals.calories), 0) > 0
                       ? `${calorieGoal - Math.round(totals.calories)} remaining`
-                      : 'Goal reached'}
+                      : 'Goal reached ✓'}
                   </Text>
                 )}
               </View>
-              {totals.calories === 0 && (
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Nothing logged yet</Text>
+              {/* Net calories chip */}
+              {totals.calories > 0 && calorieGoal > 0 && (
+                <View style={{ backgroundColor: colors.background, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[1], alignItems: 'center' }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 9, marginBottom: 1 }}>NET</Text>
+                  <Text style={{ color: totals.calories <= calorieGoal ? colors.success : colors.error, fontSize: fontSize.sm, fontWeight: fontWeight.semibold }}>
+                    {Math.round(totals.calories - calorieGoal) > 0 ? '+' : ''}{Math.round(totals.calories - calorieGoal)}
+                  </Text>
+                </View>
               )}
             </View>
+
+            {/* Calorie progress bar */}
+            {calorieGoal > 0 && (
+              <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginBottom: spacing[3] }}>
+                <View style={{ height: 4, width: `${Math.min(totals.calories / calorieGoal, 1) * 100}%`, backgroundColor: totals.calories > calorieGoal ? colors.error : colors.text, borderRadius: 2 }} />
+              </View>
+            )}
 
             {/* Macro bars */}
             <View style={{ flexDirection: 'row', gap: spacing[4] }}>
@@ -258,14 +271,22 @@ export default function NutritionTab() {
 
           {/* Water */}
           <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xl, marginHorizontal: spacing[5], padding: spacing[4], marginBottom: spacing[4] }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[3] }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing[2] }}>
               <View>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginBottom: 2 }}>WATER</Text>
-                <Text style={{ color: colors.text, fontSize: fontSize.xl, fontWeight: fontWeight.bold }}>
-                  {dayData.waterMl >= 1000
-                    ? `${(dayData.waterMl / 1000).toFixed(1)}L`
-                    : `${dayData.waterMl}ml`}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={{ color: colors.text, fontSize: fontSize.xl, fontWeight: fontWeight.bold }}>
+                    {dayData.waterMl >= 1000 ? `${(dayData.waterMl / 1000).toFixed(1)}L` : `${dayData.waterMl}ml`}
+                  </Text>
+                  {waterGoalMl > 0 && (
+                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                      / {waterGoalMl >= 1000 ? `${(waterGoalMl / 1000).toFixed(1)}L` : `${waterGoalMl}ml`}
+                    </Text>
+                  )}
+                </View>
+                {waterGoalMl > 0 && dayData.waterMl >= waterGoalMl && (
+                  <Text style={{ color: colors.success, fontSize: fontSize.xs, marginTop: 2 }}>Goal reached ✓</Text>
+                )}
               </View>
               {dayData.waterMl > 0 && (
                 <Pressable onPress={handleClearWater} hitSlop={8}>
@@ -273,6 +294,12 @@ export default function NutritionTab() {
                 </Pressable>
               )}
             </View>
+            {/* Water progress bar */}
+            {waterGoalMl > 0 && (
+              <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginBottom: spacing[3] }}>
+                <View style={{ height: 4, width: `${Math.min(dayData.waterMl / waterGoalMl, 1) * 100}%`, backgroundColor: '#3B82F6', borderRadius: 2 }} />
+              </View>
+            )}
             <View style={{ flexDirection: 'row', gap: spacing[2] }}>
               {WATER_AMOUNTS.map((ml) => (
                 <Pressable

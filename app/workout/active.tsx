@@ -337,7 +337,7 @@ export default function ActiveWorkoutScreen() {
   const navigation = useNavigation();
   const { user } = useAuthStore();
   const { sync } = useSyncStore();
-  const { defaultRestSeconds } = useSettingsStore();
+  const { defaultRestSeconds, hideDurationClock } = useSettingsStore();
   const {
     exercises,
     isPaused,
@@ -568,11 +568,13 @@ export default function ActiveWorkoutScreen() {
       >
         {/* Timer + pause toggle */}
         <Pressable onPress={isPaused ? resumeSession : pauseSession} hitSlop={8}>
-          <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold }}>
-            {formatDuration(elapsed)}
-          </Text>
-          <Text style={{ color: isPaused ? colors.warning : colors.success, fontSize: fontSize.xs, marginTop: 1 }}>
-            {isPaused ? '⏸ Paused — tap to resume' : '▶ Running'}
+          {!hideDurationClock && (
+            <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold }}>
+              {formatDuration(elapsed)}
+            </Text>
+          )}
+          <Text style={{ color: isPaused ? colors.warning : colors.success, fontSize: hideDurationClock ? fontSize.base : fontSize.xs, marginTop: hideDurationClock ? 0 : 1 }}>
+            {isPaused ? '⏸ Paused — tap to resume' : (hideDurationClock ? '▶ Running' : '▶ Running')}
           </Text>
         </Pressable>
 

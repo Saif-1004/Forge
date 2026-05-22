@@ -160,6 +160,7 @@ export default function LogFoodScreen() {
   // Scan mode
   const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const scanningRef = useRef(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<FoodResult | null>(null);
 
@@ -228,7 +229,8 @@ export default function LogFoodScreen() {
 
   // Barcode scanned
   const handleBarcode = useCallback(async (result: BarcodeScanningResult) => {
-    if (scanned || scanLoading) return;
+    if (scanningRef.current) return;
+    scanningRef.current = true;
     setScanned(true);
     setScanLoading(true);
     try {
@@ -244,14 +246,14 @@ export default function LogFoodScreen() {
         setScanResult(foods[0]);
       } else {
         Alert.alert('Not found', `Barcode ${result.data} wasn't found in the food database.`, [
-          { text: 'Try again', onPress: () => { setScanned(false); setScanResult(null); } },
-          { text: 'Enter manually', onPress: () => { setMode('search'); setScanned(false); } },
+          { text: 'Try again', onPress: () => { scanningRef.current = false; setScanned(false); setScanResult(null); } },
+          { text: 'Enter manually', onPress: () => { scanningRef.current = false; setMode('search'); setScanned(false); } },
         ]);
       }
     } finally {
       setScanLoading(false);
     }
-  }, [scanned, scanLoading]);
+  }, []);
 
   const handleUseScanResult = () => {
     if (!scanResult) return;
@@ -264,6 +266,7 @@ export default function LogFoodScreen() {
       carbs: String(m.carbs),
       fat: String(m.fat),
     });
+    scanningRef.current = false;
     setMode('search');
     setScanResult(null);
     setScanned(false);
@@ -380,7 +383,7 @@ export default function LogFoodScreen() {
   const modeBtn = (m: Mode, label: string, icon: string) => (
     <Pressable
       key={m}
-      onPress={() => { setMode(m); setSearchResults([]); setScanResult(null); setScanned(false); }}
+      onPress={() => { scanningRef.current = false; setMode(m); setSearchResults([]); setScanResult(null); setScanned(false); }}
       style={[styles.modeTab, { backgroundColor: mode === m ? colors.text : colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[2] }]}
     >
       <Text style={{ color: mode === m ? colors.background : colors.textMuted, fontSize: fontSize.sm }}>{icon} {label}</Text>
@@ -453,6 +456,10 @@ export default function LogFoodScreen() {
                 Camera access is required for barcode scanning. Enable it in Settings.
               </Text>
             </View>
+          ) : cameraPermission === null ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.textMuted} />
+            </View>
           ) : scanResult ? (
             <ScrollView contentContainerStyle={{ padding: spacing[5], paddingBottom: insets.bottom + 40 }}>
               <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[5], marginBottom: spacing[4] }}>
@@ -471,7 +478,7 @@ export default function LogFoodScreen() {
               <Pressable onPress={handleUseScanResult} style={({ pressed }) => [{ backgroundColor: colors.text, borderRadius: radius.xl, paddingVertical: spacing[4], alignItems: 'center', opacity: pressed ? 0.8 : 1, marginBottom: spacing[3] }]}>
                 <Text style={{ color: colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>Use this food →</Text>
               </Pressable>
-              <Pressable onPress={() => { setScanned(false); setScanResult(null); }} style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.6 : 1 }]}>
+              <Pressable onPress={() => { scanningRef.current = false; setScanned(false); setScanResult(null); }} style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.6 : 1 }]}>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Scan again</Text>
               </Pressable>
             </ScrollView>
@@ -482,22 +489,21 @@ export default function LogFoodScreen() {
                 facing="back"
                 barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'] }}
                 onBarcodeScanned={scanned ? undefined : handleBarcode}
-              >
-                {/* Scanning overlay */}
-                <View style={styles.scanOverlay}>
+              />
+              {/* Scanning overlay — must be outside CameraView; CameraView does not support children */}
+              <View style={styles.scanOverlay}>
+                <View style={{ flex: 1 }} />
+                <View style={{ flexDirection: 'row' }}>
                   <View style={{ flex: 1 }} />
-                  <View style={{ flexDirection: 'row' }}>
-                    <View style={{ flex: 1 }} />
-                    <View style={[styles.scanFrame, { borderColor: colors.background }]} />
-                    <View style={{ flex: 1 }} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: spacing[6] }}>
-                    {scanLoading
-                      ? <ActivityIndicator color="white" />
-                      : <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: fontSize.sm }}>Point camera at barcode</Text>}
-                  </View>
+                  <View style={[styles.scanFrame, { borderColor: colors.background }]} />
+                  <View style={{ flex: 1 }} />
                 </View>
-              </CameraView>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: spacing[6] }}>
+                  {scanLoading
+                    ? <ActivityIndicator color="white" />
+                    : <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: fontSize.sm }}>Point camera at barcode</Text>}
+                </View>
+              </View>
             </View>
           )}
         </View>

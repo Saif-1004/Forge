@@ -61,18 +61,18 @@ serve(async (req) => {
     if (entitlement) {
       // AI tier: 10 scans/day
       const todayWindow = new Date();
-      todayWindow.setHours(0, 0, 0, 0);
+      todayWindow.setUTCHours(0, 0, 0, 0);
       const windowStr = todayWindow.toISOString();
 
       const { data: rl } = await supabase
         .from('rate_limits')
-        .select('request_count, window_start')
+        .select('request_count')
         .eq('user_id', user.id)
         .eq('endpoint', 'ai_food_scan_ai_tier')
+        .eq('window_start', windowStr)
         .maybeSingle();
 
-      const isToday = rl?.window_start === windowStr;
-      const used = isToday ? (rl?.request_count ?? 0) : 0;
+      const used = rl?.request_count ?? 0;
 
       if (used >= AI_DAILY_SCAN_LIMIT) {
         return new Response(
@@ -87,7 +87,7 @@ serve(async (req) => {
         window_start: windowStr,
         request_count: used + 1,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,endpoint' });
+      }, { onConflict: 'user_id,endpoint,window_start' });
     } else {
       // Free tier: 3 lifetime scans
       const { data: rl } = await supabase
@@ -113,7 +113,7 @@ serve(async (req) => {
         window_start: LIFETIME_WINDOW,
         request_count: used + 1,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,endpoint' });
+      }, { onConflict: 'user_id,endpoint,window_start' });
     }
 
     const { imageBase64, mimeType = 'image/jpeg' } = await req.json();

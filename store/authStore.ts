@@ -19,6 +19,7 @@ interface AuthState {
   onboardingCompleted: boolean;
   unitPreference: 'kg' | 'lbs';
   displayName: string | null;
+  photoUrl: string | null;
   primaryGoal: PrimaryGoal | null;
   goalWeightKg: number | null;
   weightChangeRateKgPerWeek: number | null;
@@ -31,6 +32,7 @@ interface AuthState {
   updateDisplayName: (name: string) => Promise<void>;
   updateUnitPreference: (pref: 'kg' | 'lbs') => Promise<void>;
   updateGoals: (patch: GoalUpdate) => Promise<void>;
+  updatePhotoUrl: (url: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -41,6 +43,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onboardingCompleted: false,
   unitPreference: 'kg',
   displayName: null,
+  photoUrl: null,
   primaryGoal: null,
   goalWeightKg: null,
   weightChangeRateKgPerWeek: null,
@@ -53,7 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!session) {
       set({
         session: null, user: null, isLoading: false,
-        onboardingCompleted: false, unitPreference: 'kg', displayName: null,
+        onboardingCompleted: false, unitPreference: 'kg', displayName: null, photoUrl: null,
         primaryGoal: null, goalWeightKg: null, weightChangeRateKgPerWeek: null,
         trainingDaysPerWeek: null, equipmentAccess: [], bodyWeightKg: null, heightCm: null,
       });
@@ -64,7 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data } = await supabase
         .from('users')
         .select(
-          'onboarding_completed_at, unit_system, display_name, primary_goal, goal_weight_kg, weight_change_rate_kg_per_week, training_days_per_week, equipment_access, weight_kg, height_cm',
+          'onboarding_completed_at, unit_system, display_name, photo_url, primary_goal, goal_weight_kg, weight_change_rate_kg_per_week, training_days_per_week, equipment_access, weight_kg, height_cm',
         )
         .eq('id', session.user.id)
         .maybeSingle() as {
@@ -72,6 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             onboarding_completed_at: string | null;
             unit_system: 'imperial' | 'metric' | null;
             display_name: string | null;
+            photo_url: string | null;
             primary_goal: PrimaryGoal | null;
             goal_weight_kg: number | null;
             weight_change_rate_kg_per_week: number | null;
@@ -86,6 +90,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         onboardingCompleted: !!data?.onboarding_completed_at,
         unitPreference: data?.unit_system === 'metric' ? 'kg' : 'lbs',
         displayName: data?.display_name ?? null,
+        photoUrl: data?.photo_url ?? null,
         primaryGoal: data?.primary_goal ?? null,
         goalWeightKg: data?.goal_weight_kg ?? null,
         weightChangeRateKgPerWeek: data?.weight_change_rate_kg_per_week ?? null,
@@ -137,8 +142,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set(storeUpdate);
   },
 
+  updatePhotoUrl: async (url) => {
+    const { user } = get();
+    if (!user) return;
+    await supabase.from('users').update({ photo_url: url }).eq('id', user.id);
+    set({ photoUrl: url });
+  },
+
   signOut: async () => {
     await supabase.auth.signOut({ scope: 'global' });
-    set({ session: null, user: null, onboardingCompleted: false, unitPreference: 'kg', displayName: null });
+    set({ session: null, user: null, onboardingCompleted: false, unitPreference: 'kg', displayName: null, photoUrl: null });
   },
 }));
