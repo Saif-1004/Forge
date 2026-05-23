@@ -27,7 +27,7 @@
       }
     },
     "android": {
-      "package": "com.forgeapp.workout",
+      "package": "com.forgefitnesstracker.workout",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111111"
