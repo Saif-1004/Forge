@@ -64,7 +64,7 @@ jobs:
   eas-build-preview:
     name: EAS Build (preview)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[build]')
     needs: [typecheck, lint]
     steps:
       - uses: actions/checkout@v4
