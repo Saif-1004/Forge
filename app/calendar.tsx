@@ -102,7 +102,7 @@ export default function CalendarScreen() {
     const ids = day?.plannedExerciseIds ?? [];
     if (ids.length === 0) { setViewExerciseNames({}); return; }
     exerciseNamesByIds(ids).then(setViewExerciseNames).catch(() => setViewExerciseNames({}));
-  }, [planModal?.date, planModal?.isEditing, dayMap]);
+  }, [planModal, dayMap]);
 
   const loadMonth = useCallback(async () => {
     if (!user) return;
@@ -175,7 +175,7 @@ export default function CalendarScreen() {
         }
       } catch {}
     }
-  }, [dayMap, user]);
+  }, [dayMap, user, todayStr]);
 
   const handleDayPress = useCallback((dateStr: string) => {
     const data = dayMap.get(dateStr);

@@ -1,4 +1,4 @@
-import Svg, { Path, Circle, Ellipse, Rect, G } from 'react-native-svg';
+import Svg, { Path, Circle, Ellipse, Rect } from 'react-native-svg';
 import { View } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
 

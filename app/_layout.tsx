@@ -14,7 +14,6 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { database } from '@/lib/watermelon/database';
 import { seedExercisesIfNeeded } from '@/lib/watermelon/seed';
 import { scheduleWorkoutReminder } from '@/lib/notifications';
-import '@/lib/gymGeofence';
 import { startGymProximityTask, stopGymProximityTask } from '@/lib/gymGeofence';
 import { configureRevenueCat, signOutRevenueCat } from '@/lib/revenuecat';
 import * as Sentry from '@sentry/react-native';

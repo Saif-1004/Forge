@@ -45,7 +45,7 @@ function initials(name: string | null, userId: string): string {
 export default function TeamsTab() {
   const { colors, fontSize, fontWeight, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, displayName } = useAuthStore();
+  const { user } = useAuthStore();
   const s = spacing;
 
   const [team, setTeam] = useState<TeamData | null>(null);
