@@ -70,7 +70,8 @@ export default function AuthLandingScreen() {
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success' && result.url) {
-        await supabase.auth.exchangeCodeForSession(result.url);
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
+        if (exchangeError) throw exchangeError;
       } else if (result.type === 'cancel' || result.type === 'dismiss') {
         // User closed the browser without completing sign-in — silent, no error
       } else {
