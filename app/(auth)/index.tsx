@@ -4,11 +4,17 @@ import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as WebBrowser from 'expo-web-browser';
+import { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/Button';
+
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  scopes: ['profile', 'email'],
+});
 
 function GoogleIcon() {
   return (
@@ -59,28 +65,26 @@ export default function AuthLandingScreen() {
     setError(null);
     setGoogleLoading(true);
     try {
-      const redirectTo = 'forge://auth-callback';
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true },
-      });
-      if (error) throw error;
-      if (!data.url) throw new Error('No OAuth URL');
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      Sentry.addBreadcrumb({ category: 'auth', message: `Google OAuth result: ${result.type}`, level: 'info' });
-      if (result.type === 'success' && result.url) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
-        if (exchangeError) throw exchangeError;
-      } else if (result.type === 'cancel' || result.type === 'dismiss') {
-        // User closed the browser without completing sign-in — silent, no error
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (isSuccessResponse(response)) {
+        const idToken = response.data.idToken;
+        if (!idToken) throw new Error('Google sign in returned no ID token');
+        const { error: supabaseError } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        });
+        if (supabaseError) throw supabaseError;
+        // Auth state listener in _layout.tsx handles redirect
+      }
+      // isCancelledResponse — user dismissed the picker, no error needed
+    } catch (e) {
+      if (isErrorWithCode(e) && e.code === statusCodes.SIGN_IN_CANCELLED) {
+        // silent
       } else {
-        Sentry.captureMessage(`Google OAuth unexpected result type: ${result.type}`, 'warning');
+        Sentry.captureException(e);
         setError('Google sign in failed. Please try again.');
       }
-    } catch (e) {
-      Sentry.captureException(e);
-      setError('Google sign in failed. Please try again.');
     } finally {
       setGoogleLoading(false);
     }

@@ -23,7 +23,10 @@
         "NSLocationWhenInUseUsageDescription": "Forge uses your location to alert you when you arrive at the gym.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Forge uses background location to send a workout reminder when you arrive at the gym.",
         "NSLocationAlwaysUsageDescription": "Forge uses background location to send a workout reminder when you arrive at the gym.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       }
     },
     "android": {
@@ -86,6 +89,12 @@
           "url": "https://sentry.io/",
           "project": "react-native",
           "organization": "forge-fitness"
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "REPLACE_WITH_REVERSED_IOS_CLIENT_ID"
         }
       ]
     ],
