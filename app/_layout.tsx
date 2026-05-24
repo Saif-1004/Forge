@@ -19,7 +19,7 @@ import { configureRevenueCat, signOutRevenueCat } from '@/lib/revenuecat';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
-  dsn: 'https://647d2b08ea2f4eb593015a4a6afeb237@o4511411565101056.ingest.de.sentry.io/4511411574603856',
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   enabled: !__DEV__,
   sendDefaultPii: false,
   enableLogs: true,
