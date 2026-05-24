@@ -2,7 +2,7 @@
   "expo": {
     "name": "Forge",
     "slug": "forge-workout",
-    "version": "2.1.4",
+    "version": "2.1.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.forgeapp.workout",
       "usesAppleSignIn": true,
-      "buildNumber": "12",
+      "buildNumber": "13",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Forge uses your location to alert you when you arrive at the gym.",
@@ -31,7 +31,7 @@
     },
     "android": {
       "package": "com.forgefitnesstracker.workout",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111111"
@@ -94,7 +94,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "REPLACE_WITH_REVERSED_IOS_CLIENT_ID"
+          "iosUrlScheme": "com.googleusercontent.apps.194699631094-adftuo3a8nf9fj7fl69tmsu73ngjphab"
         }
       ]
     ],
