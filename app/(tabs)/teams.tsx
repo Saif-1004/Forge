@@ -151,9 +151,7 @@ export default function TeamsTab() {
     try {
       const code = joinCode.trim().toUpperCase();
       const { data: found, error: findErr } = await supabase
-        .from('teams')
-        .select('id, name')
-        .eq('invite_code', code)
+        .rpc('find_team_by_invite_code', { p_code: code })
         .maybeSingle();
       if (findErr || !found) { Alert.alert('Not found', 'No team with that invite code.'); return; }
       const { error: memberErr } = await supabase
