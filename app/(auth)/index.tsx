@@ -5,11 +5,10 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/Button';
-
-WebBrowser.maybeCompleteAuthSession();
 
 function GoogleIcon() {
   return (
@@ -69,15 +68,18 @@ export default function AuthLandingScreen() {
       if (!data.url) throw new Error('No OAuth URL');
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      Sentry.addBreadcrumb({ category: 'auth', message: `Google OAuth result: ${result.type}`, level: 'info' });
       if (result.type === 'success' && result.url) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
         if (exchangeError) throw exchangeError;
       } else if (result.type === 'cancel' || result.type === 'dismiss') {
         // User closed the browser without completing sign-in — silent, no error
       } else {
+        Sentry.captureMessage(`Google OAuth unexpected result type: ${result.type}`, 'warning');
         setError('Google sign in failed. Please try again.');
       }
-    } catch {
+    } catch (e) {
+      Sentry.captureException(e);
       setError('Google sign in failed. Please try again.');
     } finally {
       setGoogleLoading(false);
