@@ -11,29 +11,56 @@ const FREE_LIFETIME_SCANS = 3;
 const AI_DAILY_SCAN_LIMIT = 10;
 const LIFETIME_WINDOW = '2000-01-01T00:00:00.000Z';
 
-const SCAN_PROMPT = `You are a nutrition expert analyzing a food photo. Examine the image carefully and provide calorie and macro estimates.
+const SCAN_PROMPT = `You are a registered dietitian and expert food photographer analyst. Your task is to estimate the nutritional content of the food shown in this image as accurately as possible.
 
-Respond ONLY with a JSON object in this exact format (no markdown, no explanation):
+STEP 1 — Identify what you see:
+- What food(s) are present?
+- What container/plate is it in? (e.g. standard dinner plate ~26cm, bowl, takeaway box)
+- What visual cues indicate portion size? (plate coverage, stacking height, visible utensils for scale)
+
+STEP 2 — Estimate weight using reference points:
+- Standard dinner plate holds ~400-600g of food when loaded
+- A palm-sized protein portion = ~120-150g cooked
+- A fist of carbs (rice/pasta) = ~150-200g cooked
+- A cup of liquid = ~240ml
+- Restaurant meals: appetiser ~200-350g, main ~350-700g
+- Fast food burger = ~150-250g, large fries = ~150g
+- A slice of bread = ~30-35g, a whole bagel = ~100g
+
+STEP 3 — Calculate macros using accurate nutritional data:
+- Chicken breast (cooked): 165 kcal, 31g protein, 0g carbs, 3.6g fat per 100g
+- Rice (cooked white): 130 kcal, 2.7g protein, 28g carbs, 0.3g fat per 100g
+- Pasta (cooked): 157 kcal, 5.8g protein, 31g carbs, 0.9g fat per 100g
+- Beef mince (5% fat): 137 kcal, 21g protein, 0g carbs, 5g fat per 100g
+- Salmon (cooked): 208 kcal, 20g protein, 0g carbs, 13g fat per 100g
+- Eggs (whole, large): 72 kcal, 6g protein, 0.4g carbs, 5g fat each
+- Bread (white): 265 kcal, 9g protein, 49g carbs, 3.2g fat per 100g
+- Potato (boiled): 86 kcal, 1.8g protein, 20g carbs, 0.1g fat per 100g
+- Vegetables (mixed): ~25-35 kcal, ~2g protein, ~5g carbs, ~0.2g fat per 100g
+- Olive oil/butter adds ~90 kcal per 10g
+
+STEP 4 — Account for cooking method (adds calories):
+- Fried/sautéed in oil: add 50-150 kcal depending on visible oil
+- Grilled/baked: minimal addition
+- Deep fried: add 100-200 kcal
+
+Now respond ONLY with this JSON (no markdown, no explanation, no reasoning text):
 {
   "identified": true,
-  "food_name": "descriptive food name",
-  "estimated_weight_g": 300,
-  "calories_kcal": 450,
-  "protein_g": 35,
-  "carbs_g": 42,
-  "fat_g": 12,
+  "food_name": "specific descriptive name (e.g. 'Grilled chicken breast with rice and broccoli')",
+  "estimated_weight_g": 450,
+  "calories_kcal": 620,
+  "protein_g": 48,
+  "carbs_g": 55,
+  "fat_g": 14,
   "confidence": "high|medium|low",
-  "notes": "brief note about portion estimation"
+  "notes": "one sentence: what size reference you used and any uncertainty"
 }
 
-If you cannot identify the food or it's not a food image, return:
+If you cannot identify food or it is not a food image:
 { "identified": false, "food_name": "", "estimated_weight_g": 0, "calories_kcal": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "confidence": "low", "notes": "Could not identify food in image" }
 
-Guidelines:
-- Estimate the full visible portion, not per 100g
-- Use standard portion sizes as reference (e.g., a chicken breast is ~150g)
-- Be realistic — don't over or under estimate
-- confidence: "high" = clear single food item, "medium" = identifiable mixed dish, "low" = unclear or partially visible`;
+confidence rules: "high" = single clear food with good size reference, "medium" = mixed dish or partial view, "low" = heavily obscured or ambiguous`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -124,8 +151,8 @@ serve(async (req) => {
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
 
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
       messages: [
         {
           role: 'user',

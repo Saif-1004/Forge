@@ -463,7 +463,16 @@ export interface Database {
       };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      find_team_by_invite_code: {
+        Args: { p_code: string };
+        Returns: { id: string; name: string }[];
+      };
+      get_my_team_ids: {
+        Args: Record<string, never>;
+        Returns: string[];
+      };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };

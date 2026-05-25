@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Q } from '@nozbe/watermelondb';
 import { useTheme } from '@/hooks/useTheme';
@@ -158,8 +158,6 @@ export default function LogFoodScreen() {
   const [formInitial, setFormInitial] = useState<Parameters<typeof EntryForm>[0]['initial']>(undefined);
 
   // Scan mode
-  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
-  const [scanned, setScanned] = useState(false);
   const scanningRef = useRef(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<FoodResult | null>(null);
@@ -168,13 +166,6 @@ export default function LogFoodScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoResult, setPhotoResult] = useState<Parameters<typeof EntryForm>[0]['initial'] | null>(null);
-
-  // Request camera permission when scan/photo mode selected
-  useEffect(() => {
-    if ((mode === 'scan' || mode === 'photo') && cameraPermission === null) {
-      Camera.requestCameraPermissionsAsync().then(({ status }) => setCameraPermission(status === 'granted'));
-    }
-  }, [mode, cameraPermission]);
 
   // Open Food Facts search (debounced)
   useEffect(() => {
@@ -227,17 +218,20 @@ export default function LogFoodScreen() {
     setSearchQuery('');
   };
 
-  // Barcode scanned
-  const handleBarcode = useCallback(async (result: BarcodeScanningResult) => {
+  const resetScanner = useCallback(() => {
+    scanningRef.current = false;
+    setScanResult(null);
+  }, []);
+
+  const lookupBarcode = useCallback(async (barcode: string) => {
     if (scanningRef.current) return;
     scanningRef.current = true;
-    setScanned(true);
     setScanLoading(true);
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       const res = await fetch(
-        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/food-search?barcode=${encodeURIComponent(result.data)}`,
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/food-search?barcode=${encodeURIComponent(barcode)}`,
         { headers: { Authorization: `Bearer ${token}`, apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY! } },
       );
       const json = res.ok ? await res.json() : null;
@@ -245,15 +239,32 @@ export default function LogFoodScreen() {
       if (foods.length > 0) {
         setScanResult(foods[0]);
       } else {
-        Alert.alert('Not found', `Barcode ${result.data} wasn't found in the food database.`, [
-          { text: 'Try again', onPress: () => { scanningRef.current = false; setScanned(false); setScanResult(null); } },
-          { text: 'Enter manually', onPress: () => { scanningRef.current = false; setMode('search'); setScanned(false); } },
+        Alert.alert('Not found', `Barcode ${barcode} wasn't found in the food database.`, [
+          { text: 'Try again', onPress: resetScanner },
+          { text: 'Enter manually', onPress: () => { scanningRef.current = false; setMode('search'); } },
         ]);
       }
+    } catch {
+      Alert.alert('Error', 'Could not look up barcode. Try again.', [{ text: 'OK', onPress: resetScanner }]);
     } finally {
       setScanLoading(false);
     }
-  }, []);
+  }, [resetScanner]);
+
+  const handleLaunchScanner = useCallback(async () => {
+    const subscription = CameraView.onModernBarcodeScanned((result) => {
+      subscription.remove();
+      lookupBarcode(result.data);
+    });
+    try {
+      await CameraView.launchScanner({
+        barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
+      });
+    } catch {
+      subscription.remove();
+      Alert.alert('Error', 'Could not open barcode scanner. Please check camera permissions.');
+    }
+  }, [lookupBarcode]);
 
   const handleUseScanResult = () => {
     if (!scanResult) return;
@@ -269,7 +280,6 @@ export default function LogFoodScreen() {
     scanningRef.current = false;
     setMode('search');
     setScanResult(null);
-    setScanned(false);
   };
 
   // AI photo analysis
@@ -383,7 +393,7 @@ export default function LogFoodScreen() {
   const modeBtn = (m: Mode, label: string, icon: string) => (
     <Pressable
       key={m}
-      onPress={() => { scanningRef.current = false; setMode(m); setSearchResults([]); setScanResult(null); setScanned(false); }}
+      onPress={() => { scanningRef.current = false; setMode(m); setSearchResults([]); setScanResult(null); }}
       style={[styles.modeTab, { backgroundColor: mode === m ? colors.text : colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[2] }]}
     >
       <Text style={{ color: mode === m ? colors.background : colors.textMuted, fontSize: fontSize.sm }}>{icon} {label}</Text>
@@ -449,19 +459,9 @@ export default function LogFoodScreen() {
 
       {/* ── SCAN mode ────────────────────────────────────────────────────────── */}
       {mode === 'scan' && (
-        <View style={{ flex: 1 }}>
-          {cameraPermission === false ? (
-            <View style={styles.center}>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.base, textAlign: 'center', paddingHorizontal: spacing[8] }}>
-                Camera access is required for barcode scanning. Enable it in Settings.
-              </Text>
-            </View>
-          ) : cameraPermission === null ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={colors.textMuted} />
-            </View>
-          ) : scanResult ? (
-            <ScrollView contentContainerStyle={{ padding: spacing[5], paddingBottom: insets.bottom + 40 }}>
+        <ScrollView contentContainerStyle={{ padding: spacing[5], paddingBottom: insets.bottom + 40 }}>
+          {scanResult ? (
+            <>
               <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[5], marginBottom: spacing[4] }}>
                 <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: fontWeight.bold }}>{scanResult.name}</Text>
                 {scanResult.brand && <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginBottom: spacing[3] }}>{scanResult.brand}</Text>}
@@ -478,35 +478,37 @@ export default function LogFoodScreen() {
               <Pressable onPress={handleUseScanResult} style={({ pressed }) => [{ backgroundColor: colors.text, borderRadius: radius.xl, paddingVertical: spacing[4], alignItems: 'center', opacity: pressed ? 0.8 : 1, marginBottom: spacing[3] }]}>
                 <Text style={{ color: colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>Use this food →</Text>
               </Pressable>
-              <Pressable onPress={() => { scanningRef.current = false; setScanned(false); setScanResult(null); }} style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.6 : 1 }]}>
+              <Pressable onPress={resetScanner} style={({ pressed }) => [{ alignItems: 'center', opacity: pressed ? 0.6 : 1 }]}>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Scan again</Text>
               </Pressable>
-            </ScrollView>
+            </>
           ) : (
-            <View style={{ flex: 1 }}>
-              <CameraView
-                style={{ flex: 1 }}
-                facing="back"
-                barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'] }}
-                onBarcodeScanned={scanned ? undefined : handleBarcode}
-              />
-              {/* Scanning overlay — must be outside CameraView; CameraView does not support children */}
-              <View style={styles.scanOverlay}>
-                <View style={{ flex: 1 }} />
-                <View style={{ flexDirection: 'row' }}>
-                  <View style={{ flex: 1 }} />
-                  <View style={[styles.scanFrame, { borderColor: colors.background }]} />
-                  <View style={{ flex: 1 }} />
-                </View>
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: spacing[6] }}>
-                  {scanLoading
-                    ? <ActivityIndicator color="white" />
-                    : <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: fontSize.sm }}>Point camera at barcode</Text>}
-                </View>
+            <View>
+              <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing[6], alignItems: 'center', marginBottom: spacing[4] }}>
+                <Text style={{ fontSize: 48, marginBottom: spacing[3] }}>▦</Text>
+                <Text style={{ color: colors.text, fontSize: fontSize.base, fontWeight: fontWeight.semibold, textAlign: 'center', marginBottom: spacing[2] }}>
+                  Barcode Scanner
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20 }}>
+                  Scan a barcode to instantly look up nutrition info from the Open Food Facts database.
+                </Text>
               </View>
+              {scanLoading ? (
+                <View style={[styles.center, { minHeight: 80 }]}>
+                  <ActivityIndicator color={colors.text} size="large" />
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing[3] }}>Looking up barcode…</Text>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={handleLaunchScanner}
+                  style={({ pressed }) => [{ backgroundColor: colors.text, borderRadius: radius.xl, paddingVertical: spacing[4], alignItems: 'center', opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <Text style={{ color: colors.background, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>Scan Barcode</Text>
+                </Pressable>
+              )}
             </View>
           )}
-        </View>
+        </ScrollView>
       )}
 
       {/* ── PHOTO mode ───────────────────────────────────────────────────────── */}
@@ -565,6 +567,4 @@ const styles = StyleSheet.create({
   modeTabs: { flexDirection: 'row', borderBottomWidth: 1 },
   modeTab: {},
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scanOverlay: { ...StyleSheet.absoluteFillObject, flexDirection: 'column' },
-  scanFrame: { width: 220, height: 140, borderWidth: 2, borderRadius: 8 },
 });
