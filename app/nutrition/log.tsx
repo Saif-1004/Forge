@@ -252,8 +252,10 @@ export default function LogFoodScreen() {
   }, [resetScanner]);
 
   const handleLaunchScanner = useCallback(async () => {
-    const subscription = CameraView.onModernBarcodeScanned((result) => {
+    const subscription = CameraView.onModernBarcodeScanned(async (result) => {
       subscription.remove();
+      // iOS DataScannerViewController stays open after a scan — must dismiss manually
+      try { await CameraView.dismissScanner(); } catch {}
       lookupBarcode(result.data);
     });
     try {
@@ -262,7 +264,7 @@ export default function LogFoodScreen() {
       });
     } catch {
       subscription.remove();
-      Alert.alert('Error', 'Could not open barcode scanner. Please check camera permissions.');
+      Alert.alert('Error', 'Could not open barcode scanner. Please enable camera access in Settings.');
     }
   }, [lookupBarcode]);
 
@@ -284,11 +286,25 @@ export default function LogFoodScreen() {
 
   // AI photo analysis
   const handlePickPhoto = async (useCamera: boolean) => {
+    if (useCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Camera permission required', 'Please enable camera access in Settings to take photos.');
+        return;
+      }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Photos permission required', 'Please enable photo library access in Settings.');
+        return;
+      }
+    }
+
     let result;
     if (useCamera) {
-      result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.6, allowsEditing: true, aspect: [4, 3] });
+      result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.8, allowsEditing: true, aspect: [4, 3] });
     } else {
-      result = await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.6, allowsEditing: true, aspect: [4, 3], mediaTypes: 'images' });
+      result = await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.8, allowsEditing: true, aspect: [4, 3], mediaTypes: 'images' });
     }
     if (result.canceled || !result.assets[0]) return;
 

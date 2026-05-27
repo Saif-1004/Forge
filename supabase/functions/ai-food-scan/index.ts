@@ -11,56 +11,88 @@ const FREE_LIFETIME_SCANS = 3;
 const AI_DAILY_SCAN_LIMIT = 10;
 const LIFETIME_WINDOW = '2000-01-01T00:00:00.000Z';
 
-const SCAN_PROMPT = `You are a registered dietitian and expert food photographer analyst. Your task is to estimate the nutritional content of the food shown in this image as accurately as possible.
+const SYSTEM_PROMPT = `You are an expert nutritionist and food scientist specialising in visual portion estimation. You have spent 20 years estimating calorie and macro content from photographs for clinical nutrition studies. Your estimates are used for real calorie tracking, so accuracy matters. You estimate what you actually observe — not generic averages.`;
 
-STEP 1 — Identify what you see:
-- What food(s) are present?
-- What container/plate is it in? (e.g. standard dinner plate ~26cm, bowl, takeaway box)
-- What visual cues indicate portion size? (plate coverage, stacking height, visible utensils for scale)
+const SCAN_PROMPT = `Analyse this food photo and estimate the nutritional content. Work through it component by component.
 
-STEP 2 — Estimate weight using reference points:
-- Standard dinner plate holds ~400-600g of food when loaded
-- A palm-sized protein portion = ~120-150g cooked
-- A fist of carbs (rice/pasta) = ~150-200g cooked
-- A cup of liquid = ~240ml
-- Restaurant meals: appetiser ~200-350g, main ~350-700g
-- Fast food burger = ~150-250g, large fries = ~150g
-- A slice of bread = ~30-35g, a whole bagel = ~100g
+VISUAL SIZE REFERENCES (use whichever are visible):
+- Standard dinner plate rim-to-rim: 26cm
+- Side plate: 20cm | Bowl diameter: 16cm | Bowl capacity: ~500ml
+- Standard fork length: 19cm | Knife: 22cm | Tablespoon bowl: ~5cm
+- Credit card: 8.5cm × 5.4cm | iPhone roughly 15cm tall
 
-STEP 3 — Calculate macros using accurate nutritional data:
-- Chicken breast (cooked): 165 kcal, 31g protein, 0g carbs, 3.6g fat per 100g
-- Rice (cooked white): 130 kcal, 2.7g protein, 28g carbs, 0.3g fat per 100g
-- Pasta (cooked): 157 kcal, 5.8g protein, 31g carbs, 0.9g fat per 100g
-- Beef mince (5% fat): 137 kcal, 21g protein, 0g carbs, 5g fat per 100g
-- Salmon (cooked): 208 kcal, 20g protein, 0g carbs, 13g fat per 100g
-- Eggs (whole, large): 72 kcal, 6g protein, 0.4g carbs, 5g fat each
-- Bread (white): 265 kcal, 9g protein, 49g carbs, 3.2g fat per 100g
-- Potato (boiled): 86 kcal, 1.8g protein, 20g carbs, 0.1g fat per 100g
-- Vegetables (mixed): ~25-35 kcal, ~2g protein, ~5g carbs, ~0.2g fat per 100g
-- Olive oil/butter adds ~90 kcal per 10g
+STEP 1 — List every component you can identify (protein, carbs, veg, sauces, oils).
 
-STEP 4 — Account for cooking method (adds calories):
-- Fried/sautéed in oil: add 50-150 kcal depending on visible oil
-- Grilled/baked: minimal addition
-- Deep fried: add 100-200 kcal
+STEP 2 — For EACH component estimate its weight using visible references. Be specific:
+- How much of the plate does it cover? How thick/deep?
+- Is it dense or airy? Cooked weight vs raw?
 
-Now respond ONLY with this JSON (no markdown, no explanation, no reasoning text):
+STEP 3 — Calculate each component's nutrition using this reference data (per 100g cooked):
+
+PROTEINS:
+Chicken breast grilled: 165 kcal | 31P | 0C | 3.6F
+Chicken breast fried: 219 kcal | 29P | 4C | 10F
+Chicken thigh cooked: 209 kcal | 26P | 0C | 11F
+Beef mince 5% fat: 137 kcal | 21P | 0C | 5F
+Beef mince 15% fat: 195 kcal | 20P | 0C | 12F
+Beef steak grilled: 217 kcal | 30P | 0C | 10F
+Salmon fillet cooked: 208 kcal | 20P | 0C | 13F
+Tuna canned in water: 116 kcal | 26P | 0C | 1F
+Eggs whole cooked: 155 kcal | 13P | 1C | 11F (or ~72 kcal per large egg)
+Pork cooked: 185 kcal | 20P | 0C | 11F
+Prawns/shrimp cooked: 99 kcal | 21P | 0C | 1F
+Turkey breast cooked: 135 kcal | 29P | 0C | 2F
+
+CARBS:
+White rice cooked: 130 kcal | 2.7P | 28C | 0.3F
+Brown rice cooked: 123 kcal | 2.7P | 25C | 1F
+White pasta cooked: 157 kcal | 5.8P | 31C | 0.9F
+Bread white slice 35g: 93 kcal | 3P | 17C | 1F
+Bread wholemeal slice 35g: 81 kcal | 3.5P | 14C | 1F
+Potato boiled: 86 kcal | 1.8P | 20C | 0.1F
+Potato roasted: 149 kcal | 2.4P | 22C | 6F
+Chips/fries: 312 kcal | 3.5P | 41C | 15F
+Naan bread whole ~130g: 340 kcal | 10P | 58C | 8F
+Tortilla wrap ~40g: 122 kcal | 3P | 22C | 2.5F
+Oats porridge cooked: 71 kcal | 2.5P | 12C | 1.4F
+
+VEGETABLES:
+Broccoli/green veg: 34 kcal | 2.8P | 7C | 0.4F
+Mixed stir-fry veg: 40 kcal | 2P | 8C | 0.5F
+Salad leaves: 15 kcal | 1.4P | 2C | 0.2F
+Tomato: 18 kcal | 0.9P | 3.9C | 0.2F
+Avocado: 160 kcal | 2P | 9C | 15F
+Onion cooked: 44 kcal | 1P | 10C | 0.2F
+
+FATS & DAIRY:
+Olive oil: 884 kcal per 100ml (add ~45 kcal per visible 5ml teaspoon)
+Butter: 717 kcal per 100g (add ~36 kcal per 5g pat)
+Cheddar cheese: 403 kcal | 25P | 0C | 33F
+Sauce/gravy: ~60-100 kcal per 100ml depending on thickness
+
+STEP 4 — Add cooking method calories:
+- Visible oil sheen on surface: +50-100 kcal
+- Deep fried batter coating: +100-200 kcal
+- Creamy sauce coating: +80-150 kcal
+
+STEP 5 — Sum all components for the final total.
+
+OUTPUT: Respond with ONLY this JSON object, nothing else:
 {
   "identified": true,
-  "food_name": "specific descriptive name (e.g. 'Grilled chicken breast with rice and broccoli')",
-  "estimated_weight_g": 450,
+  "food_name": "Specific name listing main components, e.g. 'Grilled chicken breast with white rice and broccoli'",
+  "estimated_weight_g": 480,
   "calories_kcal": 620,
-  "protein_g": 48,
-  "carbs_g": 55,
-  "fat_g": 14,
+  "protein_g": 52.0,
+  "carbs_g": 58.0,
+  "fat_g": 12.5,
   "confidence": "high|medium|low",
-  "notes": "one sentence: what size reference you used and any uncertainty"
+  "notes": "Which size reference used + key uncertainty"
 }
 
-If you cannot identify food or it is not a food image:
-{ "identified": false, "food_name": "", "estimated_weight_g": 0, "calories_kcal": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "confidence": "low", "notes": "Could not identify food in image" }
+If no food visible: {"identified":false,"food_name":"","estimated_weight_g":0,"calories_kcal":0,"protein_g":0,"carbs_g":0,"fat_g":0,"confidence":"low","notes":"No food identified"}
 
-confidence rules: "high" = single clear food with good size reference, "medium" = mixed dish or partial view, "low" = heavily obscured or ambiguous`;
+confidence: "high" = single clear food, unambiguous portion; "medium" = identifiable but mixed or partially visible; "low" = heavily obscured or very ambiguous`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -152,7 +184,9 @@ serve(async (req) => {
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 16000,
+      thinking: { type: 'enabled', budget_tokens: 10000 },
+      system: SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
@@ -167,7 +201,9 @@ serve(async (req) => {
       ],
     });
 
-    const raw = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '{}';
+    // With extended thinking the response contains a thinking block then a text block
+    const textBlock = response.content.find((b) => b.type === 'text');
+    const raw = textBlock?.type === 'text' ? textBlock.text.trim() : '{}';
 
     // Extract JSON from response
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
