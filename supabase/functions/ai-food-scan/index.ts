@@ -184,8 +184,8 @@ serve(async (req) => {
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 5000,
-      thinking: { type: 'enabled', budget_tokens: 3000 },
+      max_tokens: 3000,
+      thinking: { type: 'enabled', budget_tokens: 1024 },
       system: SYSTEM_PROMPT,
       messages: [
         {
